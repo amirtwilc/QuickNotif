@@ -10,10 +10,12 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:exported="true"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+            android:name=".MainActivity"
+            android:label="@string/title_activity_main"
+            android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:name="app.amir.quicknotif.MainActivity"
-            android:theme="@style/AppTheme.NoActionBarLaunch">
+            android:exported="true">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -32,34 +34,31 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Widget Configuration -->
-        <receiver android:name=".QuickNotifWidgetProvider"
+        <receiver
+            android:name=".QuickNotifWidgetProvider"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="app.amir.quicknotif.WIDGET_REFRESH" />
             </intent-filter>
-            <meta-data android:name="android.appwidget.provider"
+            <meta-data
+                android:name="android.appwidget.provider"
                 android:resource="@xml/quick_notif_widget_info" />
         </receiver>
 
         <service
             android:name=".QuickNotifWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.widget.RemoteViewsService" />
-            </intent-filter>
-        </service>
-
+            android:exported="false" />
     </application>
 
-    <!-- Permissions -->
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- CRITICAL: Permissions for notifications and exact alarms -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>
