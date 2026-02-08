@@ -1,0 +1,307 @@
+package app.amir.quicknotif;
+
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetProvider;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.net.Uri;
+import android.os.SystemClock;
+import android.widget.RemoteViews;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
+
+public class QuickNotifWidgetProvider extends AppWidgetProvider {
+
+    public static final String ACTION_REFRESH = "app.amir.quicknotif.ACTION_REFRESH";
+    public static final String ACTION_ALARM_TICK = "app.amir.quicknotif.ACTION_ALARM_TICK";
+    public static final String ACTION_DELETE = "app.amir.quicknotif.ACTION_DELETE";
+    public static final String ACTION_REACTIVATE = "app.amir.quicknotif.ACTION_REACTIVATE";
+
+    @Override
+    public void onEnabled(Context context) {
+        schedulePeriodicUpdate(context);
+    }
+
+    @Override
+    public void onDisabled(Context context) {
+        cancelPeriodicUpdate(context);
+    }
+
+    @Override
+    public void onUpdate(Context context, AppWidgetManager appWidgetManager, int[] appWidgetIds) {
+        for (int appWidgetId : appWidgetIds) {
+            updateAppWidget(context, appWidgetManager, appWidgetId);
+        }
+        schedulePeriodicUpdate(context);
+    }
+
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        super.onReceive(context, intent);
+        String action = intent.getAction();
+        
+        if (ACTION_DELETE.equals(action)) {
+            String notificationId = intent.getStringExtra("notificationId");
+            if (notificationId != null) {
+                deleteNotification(context, notificationId);
+                refreshAllWidgets(context);
+            }
+        } else if (ACTION_REACTIVATE.equals(action)) {
+            String notificationId = intent.getStringExtra("notificationId");
+            if (notificationId != null) {
+                reactivateNotification(context, notificationId);
+                refreshAllWidgets(context);
+            }
+        } else if (ACTION_REFRESH.equals(action) || ACTION_ALARM_TICK.equals(action) || AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(action)) {
+            refreshAllWidgets(context);
+        }
+    }
+
+    private void refreshAllWidgets(Context context) {
+        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
+        ComponentName thisWidget = new ComponentName(context, QuickNotifWidgetProvider.class);
+        int[] appWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
+        for (int appWidgetId : appWidgetIds) {
+            appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_list);
+            updateAppWidget(context, appWidgetManager, appWidgetId);
+        }
+    }
+
+    private void deleteNotification(Context context, String notificationId) {
+        try {
+            SharedPreferences prefs = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
+            String notificationsJson = prefs.getString("notifications", "[]");
+            JSONArray array = new JSONArray(notificationsJson);
+            JSONArray newArray = new JSONArray();
+            
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject obj = array.getJSONObject(i);
+                String id = obj.optString("id", "");
+                if (!id.equals(notificationId)) {
+                    newArray.put(obj);
+                }
+            }
+            
+            prefs.edit().putString("notifications", newArray.toString()).apply();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void reactivateNotification(Context context, String notificationId) {
+        try {
+            SharedPreferences prefs = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
+            String notificationsJson = prefs.getString("notifications", "[]");
+            JSONArray array = new JSONArray(notificationsJson);
+
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject obj = array.getJSONObject(i);
+                String id = obj.optString("id", "");
+
+                if (id.equals(notificationId)) {
+                    String time = obj.optString("time", "");
+                    String type = obj.optString("type", "");
+
+                    // Heuristic: infer type if missing or invalid
+                    if (!"relative".equals(type) && !"absolute".equals(type)) {
+                        String lt = time == null ? "" : time.toLowerCase(Locale.getDefault());
+                        if (lt.contains("hour") || lt.contains("minute")) {
+                            type = "relative";
+                        } else if (lt.contains(":")) {
+                            type = "absolute";
+                        } else {
+                            // Default to relative if we can't tell
+                            type = "relative";
+                        }
+                        obj.put("type", type);
+                    }
+
+                    long interval = 0L;
+                    if ("relative".equals(type)) {
+                        // Prefer stored interval, otherwise derive from the time string and persist it
+                        interval = obj.optLong("interval", 0L);
+                        if (interval <= 0 && time != null && !time.isEmpty()) {
+                            // Parse patterns like "1 hour 30 minutes"
+                            String[] tokens = time.toLowerCase(Locale.getDefault()).split("\\s+");
+                            int totalMinutes = 0;
+                            for (int t = 0; t < tokens.length - 1; t++) {
+                                try {
+                                    int value = Integer.parseInt(tokens[t]);
+                                    String unit = tokens[t + 1];
+                                    if (unit.startsWith("hour")) {
+                                        totalMinutes += value * 60;
+                                    } else if (unit.startsWith("minute")) {
+                                        totalMinutes += value;
+                                    }
+                                } catch (NumberFormatException ignored) {}
+                            }
+                            if (totalMinutes > 0) {
+                                interval = totalMinutes * 60L * 1000L;
+                                obj.put("interval", interval); // persist for future reactivations
+                            }
+                        }
+                    }
+
+                    long newScheduledAt = calculateNewScheduleTime(type, time, interval);
+
+                    obj.put("scheduledAt", newScheduledAt);
+                    obj.put("updatedAt", System.currentTimeMillis());
+                    obj.put("enabled", true);
+
+                    prefs.edit().putString("notifications", array.toString()).apply();
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private long calculateNewScheduleTime(String type, String time, long interval) {
+        try {
+            if ("relative".equals(type)) {
+                // For relative time, use the stored interval if available
+                if (interval > 0) {
+                    return System.currentTimeMillis() + interval;
+                }
+                if (time != null && !time.isEmpty()) {
+                    // Try HH:mm format first (e.g., "01:30")
+                    if (time.contains(":")) {
+                        String[] parts = time.split(":");
+                        int hours = Integer.parseInt(parts[0]);
+                        int minutes = Integer.parseInt(parts[1]);
+                        return System.currentTimeMillis() + (hours * 60 * 60 * 1000L) + (minutes * 60 * 1000L);
+                    } else {
+                        // Try natural language like "1 hour 30 minutes"
+                        String[] tokens = time.toLowerCase(Locale.getDefault()).split("\\s+");
+                        int totalMinutes = 0;
+                        for (int i = 0; i < tokens.length - 1; i++) {
+                            try {
+                                int value = Integer.parseInt(tokens[i]);
+                                String unit = tokens[i + 1];
+                                if (unit.startsWith("hour")) {
+                                    totalMinutes += value * 60;
+                                } else if (unit.startsWith("minute")) {
+                                    totalMinutes += value;
+                                }
+                            } catch (NumberFormatException ignored) {}
+                        }
+                        if (totalMinutes > 0) {
+                            return System.currentTimeMillis() + (totalMinutes * 60L * 1000L);
+                        }
+                    }
+                }
+            } else {
+                // For absolute time, schedule for next occurrence
+                SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+                Date timeDate = timeFormat.parse(time);
+                
+                if (timeDate != null) {
+                    long now = System.currentTimeMillis();
+                    Date today = new Date(now);
+                    today.setHours(timeDate.getHours());
+                    today.setMinutes(timeDate.getMinutes());
+                    today.setSeconds(0);
+                    
+                    long scheduledTime = today.getTime();
+                    
+                    // If time has passed today, schedule for tomorrow
+                    if (scheduledTime <= now) {
+                        scheduledTime += 24 * 60 * 60 * 1000L;
+                    }
+                    
+                    return scheduledTime;
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        // Fallback: schedule for 1 hour from now
+        return System.currentTimeMillis() + (60 * 60 * 1000L);
+    }
+
+    static void updateAppWidget(Context context, AppWidgetManager appWidgetManager, int appWidgetId) {
+        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.quick_notif_widget);
+
+        Intent intent = new Intent(context, QuickNotifWidgetService.class);
+        intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+        intent.setData(Uri.parse(intent.toUri(Intent.URI_INTENT_SCHEME)));
+        views.setRemoteAdapter(R.id.widget_list, intent);
+        views.setEmptyView(R.id.widget_list, R.id.widget_empty);
+
+        // Set up pending intent template for list item clicks
+        Intent clickIntent = new Intent(context, QuickNotifWidgetProvider.class);
+        PendingIntent clickPendingIntent = PendingIntent.getBroadcast(
+                context,
+                0,
+                clickIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
+        );
+        views.setPendingIntentTemplate(R.id.widget_list, clickPendingIntent);
+
+        Intent appIntent = new Intent(context, MainActivity.class);
+        PendingIntent appPendingIntent = PendingIntent.getActivity(
+                context,
+                appWidgetId,
+                appIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_title, appPendingIntent);
+
+        Intent refreshIntent = new Intent(context, QuickNotifWidgetProvider.class);
+        refreshIntent.setAction(ACTION_REFRESH);
+        refreshIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+        PendingIntent refreshPendingIntent = PendingIntent.getBroadcast(
+                context,
+                (int) (System.currentTimeMillis() & 0xFFFFFFF),
+                refreshIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent);
+
+        appWidgetManager.updateAppWidget(appWidgetId, views);
+    }
+
+    private void schedulePeriodicUpdate(Context context) {
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, QuickNotifWidgetProvider.class);
+        intent.setAction(ACTION_ALARM_TICK);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                context,
+                1001,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        long interval = 5 * 60 * 1000L;
+        long triggerAt = SystemClock.elapsedRealtime() + interval;
+        if (alarmManager != null) {
+            alarmManager.setInexactRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, interval, pendingIntent);
+        }
+    }
+
+    private void cancelPeriodicUpdate(Context context) {
+        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        Intent intent = new Intent(context, QuickNotifWidgetProvider.class);
+        intent.setAction(ACTION_ALARM_TICK);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                context,
+                1001,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        if (alarmManager != null) {
+            alarmManager.cancel(pendingIntent);
+        }
+    }
+}
