@@ -13,10 +13,17 @@ export interface NotificationItem {
   interval?: number;
 }
 
+export type PermissionStep = 'notification' | 'battery' | 'autostart' | 'complete';
+
 export class NotificationService {
   private static instance: NotificationService;
   private notifications: NotificationItem[] = [];
   private savedNames: string[] = [];
+  private permissionCallbacks: {
+    onStepChange?: (step: PermissionStep) => void;
+    onComplete?: () => void;
+    onPermissionDenied?: () => void;
+  } = {};
 
   // Stable numeric ID generator to avoid collisions
   private toNumericId(id: string): number {
@@ -36,28 +43,170 @@ export class NotificationService {
     return NotificationService.instance;
   }
 
+  setPermissionCallbacks(callbacks: {
+    onStepChange?: (step: PermissionStep) => void;
+    onComplete?: () => void;
+    onPermissionDenied?: () => void;
+  }) {
+    this.permissionCallbacks = callbacks;
+  }
+
   async initialize() {
     if (Capacitor.isNativePlatform()) {
-      // Request all necessary permissions for background notifications
-      const permission = await LocalNotifications.requestPermissions();
+      // Always check current permission status
+      const permission = await LocalNotifications.checkPermissions();
+      
       if (permission.display !== 'granted') {
+        // Show notification permission dialog
+        this.permissionCallbacks.onStepChange?.('notification');
         throw new Error('Notification permission not granted');
       }
 
-      // Create notification channel for Android (required for background notifications)
-      await LocalNotifications.createChannel({
-        id: 'timer-alerts',
-        name: 'Quick Notif',
-        description: 'Critical timer notifications that bypass battery optimization',
-        importance: 5, // Maximum importance for immediate delivery
-        visibility: 1, // Public visibility
-        vibration: true,
-        lights: true,
-        lightColor: '#6366F1'
-      });
+      // Check if battery optimization is disabled
+      const batteryOptimized = await this.checkBatteryOptimization();
+      if (batteryOptimized) {
+        // Battery optimization is still ON, need to prompt user
+        this.permissionCallbacks.onStepChange?.('battery');
+        // Don't throw error, just show the dialog and continue loading data
+        await this.setupNotificationChannel();
+      } else {
+        // Everything is good, setup channel
+        await this.setupNotificationChannel();
+      }
     }
     
     await this.loadFromStorage();
+  }
+
+  async checkBatteryOptimization(): Promise<boolean> {
+    if (!Capacitor.isNativePlatform()) return false;
+    
+    try {
+      // @ts-ignore - accessing Android-specific API
+      if (window.Android && window.Android.isBatteryOptimized) {
+        // @ts-ignore
+        return window.Android.isBatteryOptimized();
+      }
+    } catch (e) {
+      console.error('Failed to check battery optimization:', e);
+    }
+    
+    // If we can't check, assume it's optimized to be safe
+    return true;
+  }
+
+  async requestNotificationPermission(): Promise<boolean> {
+    if (!Capacitor.isNativePlatform()) return true;
+
+    // Request permission
+    const permission = await LocalNotifications.requestPermissions();
+    
+    if (permission.display === 'granted') {
+      await this.setupNotificationChannel();
+      return true;
+    } else {
+      // Permission was denied
+      this.permissionCallbacks.onPermissionDenied?.();
+      return false;
+    }
+  }
+
+  async requestBatteryOptimization(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) return;
+
+    // Check if battery optimization is already disabled
+    const isOptimized = await this.checkBatteryOptimization();
+    
+    if (isOptimized) {
+      // Show the battery settings guidance dialog
+      this.permissionCallbacks.onStepChange?.('battery');
+    } else {
+      // Battery optimization already disabled, skip to next step
+      await this.requestAutoStartPermission();
+    }
+  }
+
+  async openBatterySettings(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) return;
+
+    try {
+      // @ts-ignore - accessing Android-specific API
+      if (window.Android && window.Android.openBatterySettings) {
+        // @ts-ignore
+        window.Android.openBatterySettings();
+      }
+    } catch (e) {
+      console.error('Failed to open battery settings:', e);
+    }
+  }
+
+  async requestAutoStartPermission(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) return;
+
+    this.permissionCallbacks.onStepChange?.('autostart');
+  }
+
+  async openAutoStartSettings(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) return;
+
+    try {
+      // @ts-ignore - accessing Android-specific API
+      if (window.Android && window.Android.openAutoStartSettings) {
+        // @ts-ignore
+        const opened = window.Android.openAutoStartSettings();
+        if (!opened) {
+          // Fallback to app settings if manufacturer-specific settings not available
+          this.openAppSettings();
+        }
+      } else {
+        // Fallback to app settings
+        this.openAppSettings();
+      }
+    } catch (e) {
+      console.error('Failed to open auto-start settings:', e);
+      // Fallback to app settings
+      this.openAppSettings();
+    }
+  }
+
+  async openAppSettings(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) return;
+
+    try {
+      // @ts-ignore - accessing Android-specific API
+      if (window.Android && window.Android.openAppSettings) {
+        // @ts-ignore
+        window.Android.openAppSettings();
+      }
+    } catch (e) {
+      console.error('Failed to open app settings:', e);
+    }
+  }
+
+  async verifyBatteryOptimization(): Promise<boolean> {
+    // Re-check battery optimization status
+    const isOptimized = await this.checkBatteryOptimization();
+    return !isOptimized; // Return true if NOT optimized (i.e., user set it correctly)
+  }
+
+  async completePermissionSetup(): Promise<void> {
+    this.permissionCallbacks.onStepChange?.('complete');
+  }
+
+  private async setupNotificationChannel(): Promise<void> {
+    if (!Capacitor.isNativePlatform()) return;
+
+    // Create notification channel for Android (required for background notifications)
+    await LocalNotifications.createChannel({
+      id: 'timer-alerts',
+      name: 'Quick Notif',
+      description: 'Critical timer notifications that bypass battery optimization',
+      importance: 5, // Maximum importance for immediate delivery
+      visibility: 1, // Public visibility
+      vibration: true,
+      lights: true,
+      lightColor: '#6366F1'
+    });
   }
 
   async scheduleNotification(name: string, time: string, type: 'absolute' | 'relative'): Promise<string> {
@@ -124,7 +273,7 @@ export class NotificationService {
             }]
           });
         } catch (e) {
-          console.error('Scheduling notification failed', e);
+          console.error('Scheduling failed', e);
         }
     }
 
@@ -137,7 +286,8 @@ export class NotificationService {
     if (!notification) return;
 
     notification.enabled = !notification.enabled;
-    
+    notification.updatedAt = new Date();
+
     if (Capacitor.isNativePlatform()) {
       const numericId = this.toNumericId(id);
       
