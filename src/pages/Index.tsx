@@ -1,21 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { Bell } from 'lucide-react';
-import { NotificationService, NotificationItem } from '@/services/notificationService';
-import { TimeInput } from '@/components/TimeInput';
-import { NameInput } from '@/components/NameInput';
-import { NotificationList } from '@/components/NotificationList';
-import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from "react";
+import { NotificationService, PermissionStep } from "@/services/notificationService";
+import { NotificationItem } from "@/services/notificationService";
+import { Bell } from "lucide-react";
+import { TimeInput } from "@/components/TimeInput";
+import { NotificationList } from "@/components/NotificationList";
+import { NameInput } from "@/components/NameInput";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import PermissionsDialog from "@/components/PermissionsDialog";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  console.log("📱 Index component rendering");
-  
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
-  const [notificationName, setNotificationName] = useState('');
   const [savedNames, setSavedNames] = useState<string[]>([]);
+  const [notificationName, setNotificationName] = useState("");
   const [showEmptyNameDialog, setShowEmptyNameDialog] = useState(false);
   const [pendingSchedule, setPendingSchedule] = useState<{time: string, type: 'absolute' | 'relative'} | null>(null);
+  const [permissionStep, setPermissionStep] = useState<PermissionStep | null>(null);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const { toast } = useToast();
 
   const notificationService = NotificationService.getInstance();
@@ -23,15 +25,31 @@ const Index = () => {
   useEffect(() => {
     const initializeService = async () => {
       try {
+        // Set up callbacks for permission flow
+        notificationService.setPermissionCallbacks({
+          onStepChange: (step) => {
+            setPermissionStep(step);
+            setShowPermissionDialog(true);
+          },
+          onPermissionDenied: () => {
+            setShowPermissionDialog(false);
+            toast({
+              title: "Permissions Required",
+              description: "This app requires notification permissions to function. Please enable notifications in your phone's Settings > Apps > Quick Notif > Notifications.",
+              variant: "destructive",
+              duration: 10000,
+            });
+          }
+        });
+
         await notificationService.initialize();
         setNotifications(notificationService.getNotifications());
         setSavedNames(notificationService.getSavedNames());
       } catch (error) {
-        toast({
-          title: "Permission Required",
-          description: "Please enable notifications to use this app.",
-          variant: "destructive",
-        });
+        // Error is already handled by callbacks
+        // Still load any existing data
+        setNotifications(notificationService.getNotifications());
+        setSavedNames(notificationService.getSavedNames());
       }
     };
 
@@ -45,6 +63,57 @@ const Index = () => {
 
     return () => clearInterval(interval);
   }, []);
+
+  const handlePermissionContinue = async () => {
+    switch (permissionStep) {
+      case 'notification':
+        const granted = await notificationService.requestNotificationPermission();
+        if (granted) {
+          // Move to battery check
+          await notificationService.requestBatteryOptimization();
+        }
+        // If not granted, the callback will handle showing error
+        break;
+      
+      case 'battery':
+        await notificationService.openBatterySettings();
+        // Give user time to change settings, then verify
+        setTimeout(async () => {
+          const batteryOk = await notificationService.verifyBatteryOptimization();
+          if (batteryOk) {
+            // Battery optimization disabled, move to next step
+            await notificationService.requestAutoStartPermission();
+          } else {
+            // Still optimized, show warning but allow continuing
+            toast({
+              title: "Battery Optimization Still Enabled",
+              description: "Notifications may not work reliably. You can change this later in Settings > Apps > Quick Notif > Battery.",
+              variant: "destructive",
+              duration: 8000,
+            });
+            // Still move to next step
+            await notificationService.requestAutoStartPermission();
+          }
+        }, 2000);
+        break;
+      
+      case 'autostart':
+        await notificationService.openAutoStartSettings();
+        // Move to complete step after a delay
+        setTimeout(async () => {
+          await notificationService.completePermissionSetup();
+        }, 1500);
+        break;
+      
+      case 'complete':
+        setShowPermissionDialog(false);
+        toast({
+          title: "Setup Complete!",
+          description: "Your app is ready to use.",
+        });
+        break;
+    }
+  };
 
   const handleScheduleNotification = async (time: string, type: 'absolute' | 'relative') => {
     if (!notificationName.trim()) {
@@ -123,7 +192,7 @@ const Index = () => {
       
       toast({
         title: "Notification Updated",
-        description: `"${notification?.name || 'Unnamed notification'}" timing has been updated.`,
+        description: `"${notification?.name || 'Unnamed notification'}" has been rescheduled.`,
       });
     } catch (error) {
       toast({
@@ -142,7 +211,7 @@ const Index = () => {
       
       toast({
         title: "Notification Deleted",
-        description: `"${notification?.name}" has been deleted.`,
+        description: `"${notification?.name || 'Unnamed notification'}" has been removed.`,
       });
     } catch (error) {
       toast({
@@ -158,14 +227,10 @@ const Index = () => {
       const notification = notifications.find(n => n.id === id);
       await notificationService.reactivateNotification(id);
       setNotifications(notificationService.getNotifications());
-
-      const detail = notification?.type === 'absolute'
-        ? `exact time ${notification?.time}`
-        : `duration ${notification?.time}`;
-
+      
       toast({
-        title: "Notification Rescheduled",
-        description: `"${notification?.name || 'Unnamed notification'}" rescheduled using ${detail}.`,
+        title: "Notification Reactivated",
+        description: `"${notification?.name || 'Unnamed notification'}" has been rescheduled.`,
       });
     } catch (error) {
       toast({
@@ -250,6 +315,13 @@ const Index = () => {
           description="You haven't entered a name for this notification. Do you want to create it anyway?"
           confirmText="Yes"
           cancelText="No"
+        />
+
+        <PermissionsDialog
+          open={showPermissionDialog}
+          onOpenChange={setShowPermissionDialog}
+          onContinue={handlePermissionContinue}
+          step={permissionStep || 'notification'}
         />
       </div>
     </div>
