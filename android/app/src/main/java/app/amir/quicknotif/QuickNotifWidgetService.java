@@ -61,19 +61,20 @@ public class QuickNotifWidgetService extends RemoteViewsService {
             RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_item);
             if (position < notifications.size()) {
                 NotificationData notification = notifications.get(position);
-                
+
                 // Set text content
                 rv.setTextViewText(R.id.notification_name, notification.name.isEmpty() ? "Unnamed" : notification.name);
                 rv.setTextViewText(R.id.notification_time, notification.timeString);
                 rv.setTextViewText(R.id.notification_date, notification.dateString);
-                
+
                 // Set colors based on expired status
                 if (notification.isExpired) {
-                    rv.setTextColor(R.id.notification_name, 0xFFFF5252); // Red
-                    rv.setTextColor(R.id.notification_time, 0xFFFF5252);
-                    rv.setTextColor(R.id.notification_date, 0xFFFF5252);
+                    // CHANGED: Softer rose color instead of harsh red
+                    rv.setTextColor(R.id.notification_name, 0xFFFCA5A5); // Soft rose (was 0xFFFF5252)
+                    rv.setTextColor(R.id.notification_time, 0xFFFCA5A5);
+                    rv.setTextColor(R.id.notification_date, 0xFFFCA5A5);
                     rv.setViewVisibility(R.id.expired_actions, View.VISIBLE);
-                    
+
                     // Format reactivate button text with time/duration
                     String reactivateText = "Reactivate";
                     if (!notification.time.isEmpty()) {
@@ -84,13 +85,13 @@ public class QuickNotifWidgetService extends RemoteViewsService {
                         }
                     }
                     rv.setTextViewText(R.id.btn_reactivate, reactivateText);
-                    
+
                     // Set up delete button with fill-in intent
                     Intent deleteIntent = new Intent();
                     deleteIntent.setAction(QuickNotifWidgetProvider.ACTION_DELETE);
                     deleteIntent.putExtra("notificationId", notification.id);
                     rv.setOnClickFillInIntent(R.id.btn_delete, deleteIntent);
-                    
+
                     // Set up reactivate button with fill-in intent
                     Intent reactivateIntent = new Intent();
                     reactivateIntent.setAction(QuickNotifWidgetProvider.ACTION_REACTIVATE);
@@ -136,7 +137,7 @@ public class QuickNotifWidgetService extends RemoteViewsService {
                 SimpleDateFormat dateFormat = new SimpleDateFormat("MMM d", Locale.getDefault());
                 SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
                 isoFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-                
+
                 List<NotificationData> tempNotifications = new ArrayList<>();
                 long currentTime = System.currentTimeMillis();
 
@@ -169,7 +170,7 @@ public class QuickNotifWidgetService extends RemoteViewsService {
                         tempNotifications.add(new NotificationData(id, name, timeString, dateString, scheduledAt, isExpired, time, type));
                     }
                 }
-                
+
                 // Sort by scheduled time (earliest first, expired at top)
                 Collections.sort(tempNotifications, new Comparator<NotificationData>() {
                     @Override
@@ -182,7 +183,7 @@ public class QuickNotifWidgetService extends RemoteViewsService {
                         return Long.compare(n1.scheduledAt, n2.scheduledAt);
                     }
                 });
-                
+
                 notifications.addAll(tempNotifications);
             } catch (Exception ignored) { }
         }
