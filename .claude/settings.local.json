@@ -6,7 +6,8 @@
       "Bash(npx cap sync:*)",
       "Bash(npx cap run:*)",
       "Bash(npm run build:*)",
-      "Bash(./gradlew assembleDebug:*)"
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(node -e:*)"
     ]
   }
 }

@@ -1,6 +1,7 @@
 package app.amir.quicknotif;
 
 import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -9,12 +10,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
 import androidx.annotation.RequiresApi;
 
 import com.getcapacitor.BridgeActivity;
+
+import org.json.JSONArray;
+import org.json.JSONException;
 
 public class MainActivity extends BridgeActivity {
 
@@ -173,6 +178,43 @@ public class MainActivity extends BridgeActivity {
                 startActivity(intent);
             } catch (Exception e) {
                 e.printStackTrace();
+            }
+        }
+
+        @JavascriptInterface
+        public boolean isAlarmScheduled(int notificationId) {
+            try {
+                Intent intent = new Intent(MainActivity.this, NotificationReceiver.class);
+                PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                    MainActivity.this,
+                    notificationId,
+                    intent,
+                    PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE
+                );
+                return pendingIntent != null;
+            } catch (Exception e) {
+                Log.e("QuickNotif", "Error checking alarm: " + e.getMessage());
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public String checkAllAlarms(String notificationIdsJson) {
+            try {
+                JSONArray ids = new JSONArray(notificationIdsJson);
+                JSONArray scheduled = new JSONArray();
+
+                for (int i = 0; i < ids.length(); i++) {
+                    int notifId = ids.getInt(i);
+                    if (isAlarmScheduled(notifId)) {
+                        scheduled.put(notifId);
+                    }
+                }
+
+                return scheduled.toString();
+            } catch (JSONException e) {
+                Log.e("QuickNotif", "Error checking alarms: " + e.getMessage());
+                return "[]";
             }
         }
     }

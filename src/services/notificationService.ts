@@ -3,6 +3,20 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import notificationLogger from './notificationLogger';
 
+// Android bridge type definitions
+declare global {
+  interface Window {
+    Android?: {
+      isBatteryOptimized(): boolean;
+      openBatterySettings(): void;
+      openAutoStartSettings(): boolean;
+      openAppSettings(): void;
+      isAlarmScheduled(notificationId: number): boolean;
+      checkAllAlarms(notificationIdsJson: string): string;
+    };
+  }
+}
+
 export interface NotificationItem {
   id: string;
   name: string;

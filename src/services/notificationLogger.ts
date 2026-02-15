@@ -104,7 +104,7 @@ class NotificationLogger {
     ];
 
     if (entry.notificationId) {
-      parts.push(`[ID:${entry.notificationId.substring(0, 12)}...]`);
+      parts.push(`[ID:${entry.notificationId}]`);
     }
 
     if (entry.notificationName) {
@@ -240,29 +240,59 @@ class NotificationLogger {
     });
   }
 
-  async logSystemCheck(appCount: number, androidCount: number, orphaned: string[], missing: number[]) {
+  async logSystemCheck(appCount: number, androidCount: number, orphaned: string[], missing: number[], allAppIds: string[], allAndroidIds: number[]) {
 
       let orphanedDetails: string[] = [];
+      let missingDetails: string[] = [];
+      let allAppIdsWithNames: string[] = [];
+      let allAndroidIdsWithNames: string[] = [];
 
       try {
-          const { default: notificationService } = await import('./notificationService');  // ✅ Works in browser
+          const { default: notificationService } = await import('./notificationService');
+          const allNotifications = notificationService.getNotifications();
 
+          // Format orphaned notifications
           orphanedDetails = orphaned.map(id => {
-              const notif = notificationService.getNotifications().find((n: any) => n.id === id);
-              return notif ? `${notif.name || 'Unnamed'} (${id.substring(0, 12)}...)` : id.substring(0, 12) + '...';
+              const notif = allNotifications.find((n: any) => n.id === id);
+              return notif ? `${notif.name || 'Unnamed'} (${id})` : id;
           });
+
+          // Format missing notifications (numeric IDs)
+          missingDetails = missing.map(numericId => {
+              // Find notification by converting string IDs to numeric and matching
+              const notif = allNotifications.find((n: any) => this.toNumericId(n.id) === numericId);
+              return notif ? `${notif.name || 'Unnamed'} (${numericId})` : `Unknown (${numericId})`;
+          });
+
+          // Format allAppIds with names
+          allAppIdsWithNames = allAppIds.map(id => {
+              const notif = allNotifications.find((n: any) => n.id === id);
+              const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
+              return `${id} (${name})`;
+          });
+
+          // Format allAndroidIds with names
+          allAndroidIdsWithNames = allAndroidIds.map(numericId => {
+              const notif = allNotifications.find((n: any) => this.toNumericId(n.id) === numericId);
+              const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
+              return `${numericId} (${name})`;
+          });
+
       } catch (e) {
           // Fallback: just use IDs if import fails
-          orphanedDetails = orphaned.map(id => id.substring(0, 12) + '...');
+          orphanedDetails = orphaned.map(id => id);
+          missingDetails = missing.map(id => `${id}`);
+          allAppIdsWithNames = allAppIds.map(id => id);
+          allAndroidIdsWithNames = allAndroidIds.map(id => `${id}`);
           console.error('Failed to get notification names:', e);
       }
-    
+
     await this.log({
       timestamp: new Date().toISOString(),
       type: 'SYSTEM_CHECK',
       appNotificationCount: appCount,
       androidPendingCount: androidCount,
-      message: orphanedDetails.length > 0 
+      message: orphanedDetails.length > 0
         ? `📊 System check - ⚠️ ${orphanedDetails.length} orphaned: ${orphanedDetails.join(', ')}`
         : `📊 System check complete`,
       details: {
@@ -270,8 +300,9 @@ class NotificationLogger {
         orphanedInApp: orphaned.length,
         missingInApp: missing.length,
         orphanedNotifications: orphanedDetails,
-        orphanedIds: orphaned,
-        missingIds: missing
+        missingNotifications: missingDetails,
+        allAppIds: allAppIdsWithNames,
+        allAndroidIds: allAndroidIdsWithNames
       }
     });
   }
@@ -307,49 +338,77 @@ class NotificationLogger {
     try {
       // Import here to avoid circular dependency
       const { LocalNotifications } = await import('@capacitor/local-notifications');
-      
-      // Get Android's pending notifications
+
+      // Get plugin-scheduled notifications
       const pending = await LocalNotifications.getPending();
-      
+      const pluginScheduledIds = pending.notifications.map(n => n.id);
+
       // Get app's notifications from storage
       const { default: notificationService } = await import('./notificationService');
       const appNotifications = notificationService.getNotifications();
 
-      // Find orphaned (in app but not in Android)
+      // Collect all app IDs and numeric IDs
+      const allAppIds: string[] = [];
+      const allNumericIds: number[] = [];
+
+      for (const appNotif of appNotifications) {
+        if (appNotif.enabled && appNotif.scheduledAt.getTime() > Date.now()) {
+          allAppIds.push(appNotif.id);
+          allNumericIds.push(this.toNumericId(appNotif.id));
+        }
+      }
+
+      // Check AlarmManager-scheduled notifications (native bridge)
+      let alarmScheduledIds: number[] = [];
+      if (window.Android?.checkAllAlarms) {
+        try {
+          const result = window.Android.checkAllAlarms(JSON.stringify(allNumericIds));
+          alarmScheduledIds = JSON.parse(result);
+          console.log(`🔍 AlarmManager check: ${alarmScheduledIds.length} alarms scheduled`);
+        } catch (e) {
+          console.error('Failed to check AlarmManager alarms:', e);
+        }
+      } else {
+        console.warn('AlarmManager verification not available - using plugin-only check');
+      }
+
+      // Combine both sources (plugin + AlarmManager)
+      const allScheduledIds = [...new Set([...pluginScheduledIds, ...alarmScheduledIds])];
+
+      // Find orphaned: in app storage but NOT scheduled anywhere
       const orphaned: string[] = [];
       for (const appNotif of appNotifications) {
         if (appNotif.enabled && appNotif.scheduledAt.getTime() > Date.now()) {
           const numericId = this.toNumericId(appNotif.id);
-          const inAndroid = pending.notifications.some(p => p.id === numericId);
-          
-          if (!inAndroid) {
-            orphaned.push(appNotif.id);
+          const isScheduled = allScheduledIds.includes(numericId);
+
+          if (!isScheduled) {
+            orphaned.push(appNotif.id);  // REAL orphaned - not in plugin OR AlarmManager!
           }
         }
       }
 
-      // Find missing (in Android but not in app)
+      // Find missing: scheduled in Android but not in app
       const missing: number[] = [];
-      for (const androidNotif of pending.notifications) {
-        const inApp = appNotifications.some(n => 
-          this.toNumericId(n.id) === androidNotif.id
-        );
-        
+      for (const scheduledId of allScheduledIds) {
+        const inApp = allNumericIds.includes(scheduledId);
         if (!inApp) {
-          missing.push(androidNotif.id);
+          missing.push(scheduledId);
         }
       }
 
       await this.logSystemCheck(
-        appNotifications.filter(n => n.enabled && n.scheduledAt.getTime() > Date.now()).length,
-        pending.notifications.length,
+        allAppIds.length,  // Fixed: use pre-calculated count
+        allScheduledIds.length,  // Total actually scheduled
         orphaned,
-        missing
+        missing,
+        allAppIds,
+        allScheduledIds  // Now includes both plugin and AlarmManager
       );
 
-      // Warn about orphaned notifications
+      // Warn about REAL orphaned notifications
       if (orphaned.length > 0) {
-        console.warn(`⚠️ Found ${orphaned.length} orphaned notifications (in app but not in Android)`);
+        console.error(`❌ Found ${orphaned.length} ORPHANED notifications - these will NOT fire!`);
       }
 
     } catch (e) {
