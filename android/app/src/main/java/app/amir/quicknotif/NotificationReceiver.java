@@ -73,6 +73,7 @@ public class NotificationReceiver extends BroadcastReceiver {
         // Build notification
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "timer-alerts")
                 .setSmallIcon(R.drawable.ic_stat_notification)
+                .setColor(0xFF6366F1)
                 .setContentTitle("Quick Notif")
                 .setContentText(name)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(name))

@@ -217,6 +217,53 @@ public class MainActivity extends BridgeActivity {
                 return "[]";
             }
         }
+
+        /**
+         * Cancel an AlarmManager alarm directly (for alarms scheduled by widget)
+         * This is necessary because LocalNotifications.cancel() can't cancel alarms
+         * that were scheduled directly via AlarmManager
+         */
+        @JavascriptInterface
+        public void cancelAlarmManagerNotification(String notificationId) {
+            try {
+                AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+                if (alarmManager == null) {
+                    Log.e("QuickNotif", "AlarmManager is null");
+                    return;
+                }
+
+                // Create the same PendingIntent as used by widget scheduling
+                Intent notificationIntent = new Intent(MainActivity.this, NotificationReceiver.class);
+                notificationIntent.putExtra("notificationId", notificationId);
+                notificationIntent.putExtra("notificationName", ""); // Name doesn't matter for matching
+
+                int numericId = generateNumericId(notificationId);
+
+                PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                        MainActivity.this,
+                        numericId,
+                        notificationIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+                );
+
+                // Cancel the alarm
+                alarmManager.cancel(pendingIntent);
+                Log.d("QuickNotif", "✅ Canceled AlarmManager alarm for ID: " + notificationId + " (numeric: " + numericId + ")");
+            } catch (Exception e) {
+                Log.e("QuickNotif", "❌ Error canceling AlarmManager alarm: " + e.getMessage(), e);
+            }
+        }
+
+        /**
+         * Generate consistent numeric ID from string ID (same algorithm as widget)
+         */
+        private int generateNumericId(String stringId) {
+            int hash = 5381;
+            for (int i = 0; i < stringId.length(); i++) {
+                hash = ((hash << 5) + hash) ^ stringId.charAt(i);
+            }
+            return Math.abs(hash) % 2147483646 + 1;
+        }
     }
 
 

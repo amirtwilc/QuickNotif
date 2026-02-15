@@ -29,15 +29,17 @@ npm run preview      # Preview production build
 npm run build                    # Build web assets
 npx cap sync android            # Sync to Android project
 cd android && ./gradlew assembleDebug  # Create APK
+cp android/app/build/outputs/apk/debug/app-debug.apk QuickNotif-latest.apk  # Copy APK to root
 
 # Or open in Android Studio for debugging
 npx cap open android
 ```
 
-**Important:** ALWAYS run the full build sequence (`npm run build` → `npx cap sync android` → `gradlew assembleDebug`) after making changes. This ensures:
+**Important:** ALWAYS run the full build sequence (`npm run build` → `npx cap sync android` → `gradlew assembleDebug` → `cp APK to root`) after making changes. This ensures:
 1. Web assets are built with latest code
 2. Changes are synced to the Android project
 3. A new APK is generated for testing
+4. The latest APK is copied to the root folder as `QuickNotif-latest.apk` for easy access
 
 ## Architecture
 

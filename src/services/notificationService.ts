@@ -13,6 +13,7 @@ declare global {
       openAppSettings(): void;
       isAlarmScheduled(notificationId: number): boolean;
       checkAllAlarms(notificationIdsJson: string): string;
+      cancelAlarmManagerNotification(notificationId: string): void;
     };
   }
 }
@@ -374,7 +375,12 @@ export class NotificationService {
           console.error('Scheduling (toggle) failed', e);
         }
       } else {
+        // Cancel Capacitor notification
         await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
+        // Also cancel AlarmManager alarm (in case it was scheduled by widget)
+        if (window.Android?.cancelAlarmManagerNotification) {
+          window.Android.cancelAlarmManagerNotification(id);
+        }
       }
     }
 
@@ -384,7 +390,12 @@ export class NotificationService {
   async deleteNotification(id: string): Promise<void> {
     if (Capacitor.isNativePlatform()) {
       const numericId = this.toNumericId(id);
+      // Cancel Capacitor notification
       await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
+      // Also cancel AlarmManager alarm (in case it was scheduled by widget)
+      if (window.Android?.cancelAlarmManagerNotification) {
+        window.Android.cancelAlarmManagerNotification(id);
+      }
     }
 
     this.notifications = this.notifications.filter(n => n.id !== id);
@@ -402,8 +413,13 @@ export class NotificationService {
 
     // Cancel existing notification if it exists
     if (Capacitor.isNativePlatform()) {
-      const numericId = parseInt(id.replace(/[^0-9]/g, '').slice(0, 8));
+      const numericId = this.toNumericId(id);
+      // Cancel Capacitor notification
       await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
+      // Also cancel AlarmManager alarm (in case it was scheduled by widget)
+      if (window.Android?.cancelAlarmManagerNotification) {
+        window.Android.cancelAlarmManagerNotification(id);
+      }
     }
 
     // Update notification properties

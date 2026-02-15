@@ -357,6 +357,9 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
             AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
             if (alarmManager != null) {
+                // Cancel any existing alarm with the same ID to prevent duplicates
+                alarmManager.cancel(pendingIntent);
+
                 // Schedule the alarm
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     alarmManager.setExactAndAllowWhileIdle(
