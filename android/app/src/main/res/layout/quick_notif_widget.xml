@@ -12,7 +12,8 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="8dp">
+        android:layout_marginBottom="12dp"
+        android:paddingBottom="8dp">
 
         <TextView
             android:id="@+id/widget_title"
@@ -21,9 +22,10 @@
             android:layout_weight="1"
             android:text="Quick Notif"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textSize="18sp"
             android:textStyle="bold"
-            android:fontFamily="sans-serif-medium" />
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.01" />
 
         <ImageButton
             android:id="@+id/widget_refresh"
@@ -32,9 +34,9 @@
             android:background="@android:color/transparent"
             android:contentDescription="Refresh"
             android:src="@android:drawable/ic_popup_sync"
-            android:tint="#FFFFFF" />
+            android:tint="#FFFFFF"
+            android:alpha="0.9" />
     </LinearLayout>
-
 
     <ListView
         android:id="@+id/widget_list"
@@ -43,18 +45,22 @@
         android:layout_weight="1"
         android:divider="@null"
         android:dividerHeight="0dp"
-        android:scrollbars="none" />
+        android:scrollbars="none"
+        android:clipToPadding="false"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp" />
 
     <TextView
         android:id="@+id/widget_empty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="No active schedules"
+        android:text="No notifications scheduled"
         android:textColor="#E0E0E0"
         android:gravity="center"
-        android:padding="16dp"
-        android:textSize="13sp"
-        android:fontFamily="sans-serif-light"
+        android:padding="24dp"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif"
+        android:alpha="0.7"
         android:visibility="gone" />
 
 </LinearLayout>

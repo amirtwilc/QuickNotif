@@ -1,6 +1,22 @@
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
+import notificationLogger from './notificationLogger';
+
+// Android bridge type definitions
+declare global {
+  interface Window {
+    Android?: {
+      isBatteryOptimized(): boolean;
+      openBatterySettings(): void;
+      openAutoStartSettings(): boolean;
+      openAppSettings(): void;
+      isAlarmScheduled(notificationId: number): boolean;
+      checkAllAlarms(notificationIdsJson: string): string;
+      cancelAlarmManagerNotification(notificationId: string): void;
+    };
+  }
+}
 
 export interface NotificationItem {
   id: string;
@@ -26,7 +42,7 @@ export class NotificationService {
   } = {};
 
   // Stable numeric ID generator to avoid collisions
-  private toNumericId(id: string): number {
+  toNumericId(id: string): number {
     let hash = 5381;
     for (let i = 0; i < id.length; i++) {
       hash = ((hash << 5) + hash) ^ id.charCodeAt(i);
@@ -55,7 +71,7 @@ export class NotificationService {
     if (Capacitor.isNativePlatform()) {
       // Always check current permission status
       const permission = await LocalNotifications.checkPermissions();
-      
+
       if (permission.display !== 'granted') {
         // Show notification permission dialog
         this.permissionCallbacks.onStepChange?.('notification');
@@ -74,13 +90,13 @@ export class NotificationService {
         await this.setupNotificationChannel();
       }
     }
-    
+
     await this.loadFromStorage();
   }
 
   async checkBatteryOptimization(): Promise<boolean> {
     if (!Capacitor.isNativePlatform()) return false;
-    
+
     try {
       // @ts-ignore - accessing Android-specific API
       if (window.Android && window.Android.isBatteryOptimized) {
@@ -90,7 +106,7 @@ export class NotificationService {
     } catch (e) {
       console.error('Failed to check battery optimization:', e);
     }
-    
+
     // If we can't check, assume it's optimized to be safe
     return true;
   }
@@ -100,7 +116,7 @@ export class NotificationService {
 
     // Request permission
     const permission = await LocalNotifications.requestPermissions();
-    
+
     if (permission.display === 'granted') {
       await this.setupNotificationChannel();
       return true;
@@ -116,7 +132,7 @@ export class NotificationService {
 
     // Check if battery optimization is already disabled
     const isOptimized = await this.checkBatteryOptimization();
-    
+
     if (isOptimized) {
       // Show the battery settings guidance dialog
       this.permissionCallbacks.onStepChange?.('battery');
@@ -196,23 +212,32 @@ export class NotificationService {
   private async setupNotificationChannel(): Promise<void> {
     if (!Capacitor.isNativePlatform()) return;
 
-    // Create notification channel for Android (required for background notifications)
-    await LocalNotifications.createChannel({
-      id: 'timer-alerts',
-      name: 'Quick Notif',
-      description: 'Critical timer notifications that bypass battery optimization',
-      importance: 5, // Maximum importance for immediate delivery
-      visibility: 1, // Public visibility
-      vibration: true,
-      lights: true,
-      lightColor: '#6366F1'
-    });
+    try {
+      // Always recreate channel (idempotent operation)
+      await LocalNotifications.createChannel({
+        id: 'timer-alerts',
+        name: 'Quick Notif',
+        description: 'Critical timer notifications',
+        importance: 5,
+        visibility: 1,
+        vibration: true,
+        lights: true,
+        lightColor: '#6366F1',
+        sound: 'default' // Add sound
+      });
+    } catch (e) {
+      console.error('Channel creation failed', e);
+      throw e; // Fail loudly
+    }
   }
 
   async scheduleNotification(name: string, time: string, type: 'absolute' | 'relative'): Promise<string> {
+    // Ensure channel exists before scheduling
+    await this.setupNotificationChannel();
+
     const id = `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const scheduledAt = this.calculateScheduleTime(time, type);
-    
+
     // Store interval (ms) for relative notifications so the widget can reactivate correctly
     const intervalMs = type === 'relative' ? (() => {
       const parts = time.toLowerCase().split(' ');
@@ -227,7 +252,7 @@ export class NotificationService {
       }
       return totalMinutes * 60 * 1000;
     })() : undefined;
-    
+
     const notification: NotificationItem = {
       id,
       name,
@@ -241,40 +266,62 @@ export class NotificationService {
 
     this.notifications.push(notification);
     this.addToSavedNames(name);
-    
+
+    await notificationLogger.logSchedule(id, name, scheduledAt.getTime(), type);
+
     if (Capacitor.isNativePlatform()) {
-        const atDate = scheduledAt.getTime() <= Date.now() + 500 ? new Date(Date.now() + 1000) : scheduledAt;
-        try {
-          await LocalNotifications.schedule({
-            notifications: [{
-              title: 'Quick Notif',
-              body: name,
-              id: this.toNumericId(id),
-              schedule: { 
-                at: atDate,
-                allowWhileIdle: true,
-                repeats: false
-              },
-              channelId: 'timer-alerts',
-              attachments: undefined,
-              actionTypeId: '',
-              extra: { 
-                wakeUp: true,
-                exactTiming: true 
-              },
-              ongoing: false,
-              autoCancel: true,
-              largeBody: name,
-              summaryText: '',
-              smallIcon: 'ic_stat_notification',
-              largeIcon: '',
-              iconColor: '#6366F1',
-              threadIdentifier: 'quick-notif'
-            }]
-          });
-        } catch (e) {
-          console.error('Scheduling failed', e);
+      const atDate = scheduledAt.getTime() <= Date.now() + 500 ? new Date(Date.now() + 1000) : scheduledAt;
+      try {
+        await LocalNotifications.schedule({
+          notifications: [{
+            title: 'Quick Notif',
+            body: name,
+            id: this.toNumericId(id),
+            schedule: {
+              at: atDate,
+              allowWhileIdle: true,
+              repeats: false
+            },
+            channelId: 'timer-alerts',
+            attachments: undefined,
+            actionTypeId: '',
+            extra: {
+              wakeUp: true,
+              exactTiming: true
+            },
+            ongoing: false,
+            autoCancel: true,
+            largeBody: name,
+            summaryText: '',
+            smallIcon: 'ic_stat_notification',
+            largeIcon: '',
+            iconColor: '#6366F1',
+            threadIdentifier: 'quick-notif'
+          }]
+        });
+
+        // Verify and log result
+        await new Promise(resolve => setTimeout(resolve, 100));
+        const verified = await this.verifyNotificationScheduled(id);
+
+        // Verify it was actually scheduled
+        const pending = await LocalNotifications.getPending();
+        const wasScheduled = pending.notifications.some(n => n.id === this.toNumericId(id));
+
+        if (!wasScheduled) {
+          throw new Error('Notification was not added to pending list');
         }
+
+      } catch (e) {
+        await notificationLogger.logError('Schedule failed', e, id);
+        console.error('Scheduling failed', e);
+
+        // Delete from list since it didn't actually schedule
+        this.notifications = this.notifications.filter(n => n.id !== id);
+
+        // Re-throw so UI can show error
+        throw new Error('Failed to schedule notification: ' + (e as Error).message);
+      }
     }
 
     this.saveToStorage();
@@ -290,7 +337,7 @@ export class NotificationService {
 
     if (Capacitor.isNativePlatform()) {
       const numericId = this.toNumericId(id);
-      
+
       if (notification.enabled) {
         const atDate = notification.scheduledAt.getTime() <= Date.now()
           ? this.calculateScheduleTime(notification.time, notification.type)
@@ -302,7 +349,7 @@ export class NotificationService {
               title: 'Quick Notif',
               body: notification.name,
               id: numericId,
-              schedule: { 
+              schedule: {
                 at: atDate,
                 allowWhileIdle: true,
                 repeats: false
@@ -310,9 +357,9 @@ export class NotificationService {
               channelId: 'timer-alerts',
               attachments: undefined,
               actionTypeId: '',
-              extra: { 
+              extra: {
                 wakeUp: true,
-                exactTiming: true 
+                exactTiming: true
               },
               ongoing: false,
               autoCancel: true,
@@ -328,7 +375,12 @@ export class NotificationService {
           console.error('Scheduling (toggle) failed', e);
         }
       } else {
+        // Cancel Capacitor notification
         await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
+        // Also cancel AlarmManager alarm (in case it was scheduled by widget)
+        if (window.Android?.cancelAlarmManagerNotification) {
+          window.Android.cancelAlarmManagerNotification(id);
+        }
       }
     }
 
@@ -338,10 +390,20 @@ export class NotificationService {
   async deleteNotification(id: string): Promise<void> {
     if (Capacitor.isNativePlatform()) {
       const numericId = this.toNumericId(id);
+      // Cancel Capacitor notification
       await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
+      // Also cancel AlarmManager alarm (in case it was scheduled by widget)
+      if (window.Android?.cancelAlarmManagerNotification) {
+        window.Android.cancelAlarmManagerNotification(id);
+      }
     }
-    
+
     this.notifications = this.notifications.filter(n => n.id !== id);
+
+    const notification = this.notifications.find(n => n.id === id);
+    if (!notification) return;
+
+    await notificationLogger.logDelete(id, notification.name);
     this.saveToStorage();
   }
 
@@ -351,8 +413,13 @@ export class NotificationService {
 
     // Cancel existing notification if it exists
     if (Capacitor.isNativePlatform()) {
-      const numericId = parseInt(id.replace(/[^0-9]/g, '').slice(0, 8));
+      const numericId = this.toNumericId(id);
+      // Cancel Capacitor notification
       await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
+      // Also cancel AlarmManager alarm (in case it was scheduled by widget)
+      if (window.Android?.cancelAlarmManagerNotification) {
+        window.Android.cancelAlarmManagerNotification(id);
+      }
     }
 
     // Update notification properties
@@ -390,7 +457,7 @@ export class NotificationService {
             title: 'Quick Notif',
             body: notification.name,
             id: numericId,
-            schedule: { 
+            schedule: {
               at: atDate,
               allowWhileIdle: true,
               repeats: false
@@ -398,9 +465,9 @@ export class NotificationService {
             channelId: 'timer-alerts',
             attachments: undefined,
             actionTypeId: '',
-            extra: { 
+            extra: {
               wakeUp: true,
-              exactTiming: true 
+              exactTiming: true
             },
             ongoing: false,
             autoCancel: true,
@@ -423,10 +490,17 @@ export class NotificationService {
   async reactivateNotification(id: string): Promise<void> {
     const notification = this.notifications.find(n => n.id === id);
     if (!notification) return;
+
+    const newScheduledAt = this.calculateScheduleTime(notification.time, notification.type);
+    await notificationLogger.logReactivate(id, notification.name, newScheduledAt.getTime());
     // Reuse update flow with existing time/type to compute next schedule from now
     await this.updateNotificationTime(id, notification.time, notification.type);
   }
- 
+
+  async refresh(): Promise<void> {
+    await this.loadFromStorage();
+  }
+
   getNotifications(): NotificationItem[] {
     return [...this.notifications].sort((a, b) => a.scheduledAt.getTime() - b.scheduledAt.getTime());
   }
@@ -437,34 +511,34 @@ export class NotificationService {
 
   private calculateScheduleTime(time: string, type: 'absolute' | 'relative'): Date {
     const now = new Date();
-    
+
     if (type === 'absolute') {
       const [hours, minutes] = time.split(':').map(Number);
       const targetTime = new Date();
       targetTime.setHours(hours, minutes, 0, 0);
-      
+
       // If the time has passed today, schedule for tomorrow
       if (targetTime <= now) {
         targetTime.setDate(targetTime.getDate() + 1);
       }
-      
+
       return targetTime;
     } else {
       // Parse relative time like "15 minutes", "1 hour", "2 hours 30 minutes"
       const parts = time.toLowerCase().split(' ');
       let totalMinutes = 0;
-      
+
       for (let i = 0; i < parts.length; i += 2) {
         const value = parseInt(parts[i]);
         const unit = parts[i + 1];
-        
+
         if (unit.includes('hour')) {
           totalMinutes += value * 60;
         } else if (unit.includes('minute')) {
           totalMinutes += value;
         }
       }
-      
+
       const targetTime = new Date(now.getTime() + totalMinutes * 60 * 1000);
       return targetTime;
     }
@@ -513,7 +587,7 @@ export class NotificationService {
     } else {
       const savedNotifications = localStorage.getItem('notifications');
       const savedNamesStorage = localStorage.getItem('savedNames');
-      
+
       if (savedNotifications) {
         this.notifications = JSON.parse(savedNotifications).map((n: any) => ({
           ...n,
@@ -521,10 +595,32 @@ export class NotificationService {
           updatedAt: new Date(n.updatedAt || n.createdAt || new Date())
         }));
       }
-      
+
       if (savedNamesStorage) {
         this.savedNames = JSON.parse(savedNamesStorage);
       }
     }
   }
+
+  async verifyNotificationScheduled(id: string): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return true;
+  
+  try {
+    const pending = await LocalNotifications.getPending();
+    const numericId = this.toNumericId(id);
+    
+    const exists = pending.notifications.some(n => n.id === numericId);
+    
+    if (!exists) {
+      console.warn(`⚠️ Notification ${id} not in pending list!`);
+    }
+    
+    return exists;
+  } catch (e) {
+    console.error('Failed to verify notification', e);
+    return false;
+  }
 }
+}
+
+export default NotificationService.getInstance();
