@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/dialog_background"
+    android:padding="24dp"
+    android:layoutDirection="ltr">
+
+    <!-- Title -->
+    <TextView
+        android:id="@+id/dialog_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Reschedule Notification"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#1F2937"
+        android:layout_marginBottom="20dp" />
+
+    <!-- Type selection -->
+    <RadioGroup
+        android:id="@+id/type_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <RadioButton
+            android:id="@+id/type_absolute"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Exact Time"
+            android:textSize="14sp"
+            android:buttonTint="#8B5CF6" />
+
+        <RadioButton
+            android:id="@+id/type_relative"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Duration"
+            android:textSize="14sp"
+            android:buttonTint="#8B5CF6" />
+    </RadioGroup>
+
+    <!-- Absolute time container -->
+    <LinearLayout
+        android:id="@+id/absolute_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select time:"
+            android:textSize="14sp"
+            android:textColor="#4B5563"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/select_time_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="12:00"
+            android:textSize="16sp"
+            android:backgroundTint="#8B5CF6"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="16dp" />
+    </LinearLayout>
+
+    <!-- Relative time container -->
+    <LinearLayout
+        android:id="@+id/relative_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="visible"
+        android:layoutDirection="ltr">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Duration from now:"
+            android:textSize="14sp"
+            android:textColor="#4B5563"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp"
+            android:layoutDirection="ltr"
+            android:baselineAligned="false">
+
+            <!-- Hours input - ALWAYS on the LEFT -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginEnd="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Hours"
+                    android:textSize="12sp"
+                    android:textColor="#6B7280"
+                    android:gravity="center"
+                    android:layout_marginBottom="4dp" />
+
+                <EditText
+                    android:id="@+id/hours_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/input_background"
+                    android:hint="0"
+                    android:inputType="number"
+                    android:textSize="16sp"
+                    android:padding="12dp"
+                    android:gravity="center"
+                    android:maxLength="2"
+                    android:layoutDirection="ltr" />
+            </LinearLayout>
+
+            <!-- Minutes input - ALWAYS on the RIGHT -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Minutes"
+                    android:textSize="12sp"
+                    android:textColor="#6B7280"
+                    android:gravity="center"
+                    android:layout_marginBottom="4dp" />
+
+                <EditText
+                    android:id="@+id/minutes_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@drawable/input_background"
+                    android:hint="0"
+                    android:inputType="number"
+                    android:textSize="16sp"
+                    android:padding="12dp"
+                    android:gravity="center"
+                    android:maxLength="2"
+                    android:layoutDirection="ltr" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Quick duration buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp"
+            android:layoutDirection="ltr">
+
+            <Button
+                android:id="@+id/btn_5min"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="5m"
+                android:textSize="12sp"
+                android:backgroundTint="#E5E7EB"
+                android:textColor="#374151"
+                android:layout_marginEnd="4dp"
+                style="?android:attr/borderlessButtonStyle" />
+
+            <Button
+                android:id="@+id/btn_15min"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="15m"
+                android:textSize="12sp"
+                android:backgroundTint="#E5E7EB"
+                android:textColor="#374151"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                style="?android:attr/borderlessButtonStyle" />
+
+            <Button
+                android:id="@+id/btn_30min"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="30m"
+                android:textSize="12sp"
+                android:backgroundTint="#E5E7EB"
+                android:textColor="#374151"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp"
+                style="?android:attr/borderlessButtonStyle" />
+
+            <Button
+                android:id="@+id/btn_1hour"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="1h"
+                android:textSize="12sp"
+                android:backgroundTint="#E5E7EB"
+                android:textColor="#374151"
+                android:layout_marginStart="4dp"
+                style="?android:attr/borderlessButtonStyle" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Action buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:layout_marginTop="8dp"
+        android:layoutDirection="ltr">
+
+        <Button
+            android:id="@+id/cancel_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Cancel"
+            android:textSize="14sp"
+            android:backgroundTint="#E5E7EB"
+            android:textColor="#374151"
+            android:layout_marginEnd="8dp"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            style="?android:attr/borderlessButtonStyle" />
+
+        <Button
+            android:id="@+id/confirm_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Reschedule"
+            android:textSize="14sp"
+            android:backgroundTint="#8B5CF6"
+            android:textColor="#FFFFFF"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp" />
+    </LinearLayout>
+</LinearLayout>

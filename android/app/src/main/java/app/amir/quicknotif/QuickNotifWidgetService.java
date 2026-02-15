@@ -86,6 +86,14 @@ public class QuickNotifWidgetService extends RemoteViewsService {
                     }
                     rv.setTextViewText(R.id.btn_reactivate, reactivateText);
 
+                    // Set up reschedule button with fill-in intent
+                    Intent rescheduleIntent = new Intent();
+                    rescheduleIntent.setAction(QuickNotifWidgetProvider.ACTION_RESCHEDULE);
+                    rescheduleIntent.putExtra("notificationId", notification.id);
+                    rescheduleIntent.putExtra("notificationName", notification.name);
+                    rescheduleIntent.putExtra("notificationType", notification.type);
+                    rv.setOnClickFillInIntent(R.id.btn_reschedule, rescheduleIntent);
+
                     // Set up delete button with fill-in intent
                     Intent deleteIntent = new Intent();
                     deleteIntent.setAction(QuickNotifWidgetProvider.ACTION_DELETE);

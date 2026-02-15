@@ -20,8 +20,46 @@ export const NameInput: React.FC<NameInputProps> = ({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredNames, setFilteredNames] = useState<string[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (value) {
+      const filtered = savedNames.filter(name => 
+        name.toLowerCase().includes(value.toLowerCase()) && name !== value
+      );
+      setFilteredNames(filtered);
+      // Only show if input is focused
+      if (document.activeElement === inputRef.current) {
+        setShowSuggestions(filtered.length > 0);
+      }
+    } else {
+      setFilteredNames(savedNames.slice(0, 5));
+      // Only show if input is focused
+      if (document.activeElement === inputRef.current) {
+        setShowSuggestions(savedNames.length > 0);
+      }
+    }
+  }, [value, savedNames]);
+
+  // Handle clicks outside the component
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('mousedown', handleClickOutside);
+    
+    return () => {
+      // Cleanup
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleInputFocus = () => {
+    // Show suggestions when input is focused
     if (value) {
       const filtered = savedNames.filter(name => 
         name.toLowerCase().includes(value.toLowerCase()) && name !== value
@@ -32,15 +70,11 @@ export const NameInput: React.FC<NameInputProps> = ({
       setFilteredNames(savedNames.slice(0, 5));
       setShowSuggestions(savedNames.length > 0);
     }
-  }, [value, savedNames]);
-
-  const handleInputFocus = () => {
-    setShowSuggestions(savedNames.length > 0);
   };
 
   const handleInputBlur = () => {
-    // Delay hiding suggestions to allow for click events
-    setTimeout(() => setShowSuggestions(false), 150);
+    // Don't hide immediately - let the click event fire first
+    // The click outside handler will take care of closing if needed
   };
 
   const selectName = (name: string) => {
@@ -50,7 +84,7 @@ export const NameInput: React.FC<NameInputProps> = ({
   };
 
   return (
-    <div className="relative mb-4">
+    <div ref={containerRef} className="relative mb-4">
       <Label htmlFor="notification-name" className="text-sm font-medium text-muted-foreground">
         Notification Name
       </Label>

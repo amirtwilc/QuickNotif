@@ -9,12 +9,17 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Environment;
 import android.os.SystemClock;
+import android.util.Log;
 import android.widget.RemoteViews;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -26,6 +31,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
     public static final String ACTION_ALARM_TICK = "app.amir.quicknotif.ACTION_ALARM_TICK";
     public static final String ACTION_DELETE = "app.amir.quicknotif.ACTION_DELETE";
     public static final String ACTION_REACTIVATE = "app.amir.quicknotif.ACTION_REACTIVATE";
+    public static final String ACTION_RESCHEDULE = "app.amir.quicknotif.ACTION_RESCHEDULE";
 
     @Override
     public void onEnabled(Context context) {
@@ -62,9 +68,23 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
                 reactivateNotification(context, notificationId);
                 refreshAllWidgets(context);
             }
+
+        } else if (ACTION_RESCHEDULE.equals(action)) {
+            String notificationId = intent.getStringExtra("notificationId");
+            String notificationName = intent.getStringExtra("notificationName");
+            String notificationType = intent.getStringExtra("notificationType"); // ADD THIS LINE
+            if (notificationId != null) {
+                Intent rescheduleIntent = new Intent(context, RescheduleActivity.class);
+                rescheduleIntent.putExtra("notificationId", notificationId);
+                rescheduleIntent.putExtra("notificationName", notificationName);
+                rescheduleIntent.putExtra("notificationType", notificationType); // ADD THIS LINE
+                rescheduleIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(rescheduleIntent);
+            }
         } else if (ACTION_REFRESH.equals(action) || ACTION_ALARM_TICK.equals(action) || AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(action)) {
             refreshAllWidgets(context);
         }
+
     }
 
     private void refreshAllWidgets(Context context) {
@@ -109,6 +129,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
                 String id = obj.optString("id", "");
 
                 if (id.equals(notificationId)) {
+                    String name = obj.optString("name", "");
                     String time = obj.optString("time", "");
                     String type = obj.optString("type", "");
 
@@ -159,6 +180,9 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
                     obj.put("enabled", true);
 
                     prefs.edit().putString("notifications", array.toString()).apply();
+                    scheduleAndroidNotification(context, id, name, newScheduledAt);
+                    writeToLog(context, "REACTIVATE", id, name, newScheduledAt);
+
                     break;
                 }
             }
@@ -302,6 +326,102 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
         );
         if (alarmManager != null) {
             alarmManager.cancel(pendingIntent);
+        }
+    }
+
+    /**
+     * Actually schedule the notification in Android's AlarmManager
+     * This is what was missing!
+     */
+    private void scheduleAndroidNotification(Context context, String notificationId, String name, long scheduledAt) {
+        try {
+            Log.d("QuickNotifWidget", "📅 Scheduling in Android: " + name + " at " + new Date(scheduledAt));
+
+            // Create intent for NotificationReceiver
+            Intent notificationIntent = new Intent(context, NotificationReceiver.class);
+            notificationIntent.putExtra("notificationId", notificationId);
+            notificationIntent.putExtra("notificationName", name);
+
+            // Generate numeric ID
+            int numericId = generateNumericId(notificationId);
+
+            // Create pending intent
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                    context,
+                    numericId,
+                    notificationIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+
+            // Get AlarmManager
+            AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+
+            if (alarmManager != null) {
+                // Schedule the alarm
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            scheduledAt,
+                            pendingIntent
+                    );
+                } else {
+                    alarmManager.setExact(
+                            AlarmManager.RTC_WAKEUP,
+                            scheduledAt,
+                            pendingIntent
+                    );
+                }
+
+                Log.d("QuickNotifWidget", "✅ Notification scheduled in Android AlarmManager");
+            } else {
+                Log.e("QuickNotifWidget", "❌ AlarmManager is null");
+            }
+        } catch (Exception e) {
+            Log.e("QuickNotifWidget", "❌ Failed to schedule Android notification", e);
+        }
+    }
+
+    /**
+     * Generate consistent numeric ID from string ID
+     */
+    private int generateNumericId(String stringId) {
+        int hash = 5381;
+        for (int i = 0; i < stringId.length(); i++) {
+            hash = ((hash << 5) + hash) ^ stringId.charAt(i);
+        }
+        return Math.abs(hash) % 2147483646 + 1;
+    }
+
+    /**
+     * Write widget actions to debug log file
+     */
+    private void writeToLog(Context context, String type, String id, String name, long scheduledAt) {
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
+            String timestamp = sdf.format(new Date());
+
+            SimpleDateFormat timeSdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US);
+            String scheduledTime = timeSdf.format(new Date(scheduledAt));
+
+            String logLine = String.format("[%s] [%s] [ID:%s...] [%s] 🔄 Widget action for %s\n",
+                    timestamp,
+                    type,
+                    id.substring(0, Math.min(12, id.length())),
+                    name,
+                    scheduledTime
+            );
+
+            // Write to same log file the app uses
+            File documentsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS);
+            File logFile = new File(documentsDir, "notification_debug.log");
+
+            FileWriter writer = new FileWriter(logFile, true); // append mode
+            writer.write(logLine);
+            writer.close();
+
+            Log.d("QuickNotifWidget", "✅ Wrote to log file");
+        } catch (Exception e) {
+            Log.e("QuickNotifWidget", "❌ Failed to write to log", e);
         }
     }
 }
