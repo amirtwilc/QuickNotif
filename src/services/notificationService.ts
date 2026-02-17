@@ -379,6 +379,9 @@ export class NotificationService {
   }
 
   async deleteNotification(id: string): Promise<void> {
+    // Get notification before removing it (for logging)
+    const notification = this.notifications.find(n => n.id === id);
+
     if (Capacitor.isNativePlatform()) {
       const numericId = toNumericId(id);
       // Cancel Capacitor notification
@@ -391,10 +394,10 @@ export class NotificationService {
 
     this.notifications = this.notifications.filter(n => n.id !== id);
 
-    const notification = this.notifications.find(n => n.id === id);
-    if (!notification) return;
+    if (notification) {
+      await notificationLogger.logDelete(id, notification.name);
+    }
 
-    await notificationLogger.logDelete(id, notification.name);
     this.saveToStorage();
   }
 
