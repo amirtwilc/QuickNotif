@@ -32,6 +32,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
     public static final String ACTION_DELETE = "app.amir.quicknotif.ACTION_DELETE";
     public static final String ACTION_REACTIVATE = "app.amir.quicknotif.ACTION_REACTIVATE";
     public static final String ACTION_RESCHEDULE = "app.amir.quicknotif.ACTION_RESCHEDULE";
+    public static final String ACTION_ADD = "app.amir.quicknotif.ACTION_ADD";
 
     @Override
     public void onEnabled(Context context) {
@@ -81,6 +82,10 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
                 rescheduleIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 context.startActivity(rescheduleIntent);
             }
+        } else if (ACTION_ADD.equals(action)) {
+            Intent addIntent = new Intent(context, AddNotificationActivity.class);
+            addIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(addIntent);
         } else if (ACTION_REFRESH.equals(action) || ACTION_ALARM_TICK.equals(action) || AppWidgetManager.ACTION_APPWIDGET_UPDATE.equals(action)) {
             refreshAllWidgets(context);
         }
@@ -293,6 +298,18 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
         views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent);
+
+        // Set up "+" button to open AddNotificationActivity
+        Intent addIntent = new Intent(context, QuickNotifWidgetProvider.class);
+        addIntent.setAction(ACTION_ADD);
+        addIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
+        PendingIntent addPendingIntent = PendingIntent.getBroadcast(
+                context,
+                (int) (System.currentTimeMillis() & 0xFFFFFFF) + 1, // Different from refresh
+                addIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        views.setOnClickPendingIntent(R.id.widget_add, addPendingIntent);
 
         appWidgetManager.updateAppWidget(appWidgetId, views);
     }

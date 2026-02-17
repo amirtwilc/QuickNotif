@@ -27,20 +27,20 @@
         android:layout_marginBottom="16dp">
 
         <RadioButton
-            android:id="@+id/type_absolute"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Exact Time"
-            android:textSize="14sp"
-            android:buttonTint="#8B5CF6" />
-
-        <RadioButton
             android:id="@+id/type_relative"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Duration"
+            android:textSize="14sp"
+            android:buttonTint="#8B5CF6" />
+
+        <RadioButton
+            android:id="@+id/type_absolute"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Exact Time"
             android:textSize="14sp"
             android:buttonTint="#8B5CF6" />
     </RadioGroup>
