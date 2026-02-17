@@ -30,9 +30,6 @@ npm run build                    # Build web assets
 npx cap sync android            # Sync to Android project
 cd android && ./gradlew assembleDebug  # Create APK
 cp android/app/build/outputs/apk/debug/app-debug.apk QuickNotif-latest.apk  # Copy APK to root
-
-# Or open in Android Studio for debugging
-npx cap open android
 ```
 
 **Important:** ALWAYS run the full build sequence (`npm run build` → `npx cap sync android` → `gradlew assembleDebug` → `cp APK to root`) after making changes. This ensures:
@@ -127,89 +124,6 @@ Used by `NotificationService.ts` to guide users through permission setup.
   - `RescheduleActivity.java`: Widget reschedule dialog
   - `BootReceiver.java`: Boot completion handler
 - `android/app/src/main/AndroidManifest.xml`: Permissions and component declarations
-
-## Common Patterns
-
-### Scheduling a Notification
-
-Both TypeScript and Java can schedule:
-
-**TypeScript** (`notificationService.ts:219-314`):
-```typescript
-await LocalNotifications.schedule({
-  notifications: [{
-    id: this.toNumericId(stringId),
-    schedule: { at: date, allowWhileIdle: true },
-    channelId: 'timer-alerts',
-    // ... other fields
-  }]
-})
-```
-
-**Java** (`QuickNotifWidgetProvider.java:336-382`):
-```java
-Intent intent = new Intent(context, NotificationReceiver.class);
-PendingIntent pendingIntent = PendingIntent.getBroadcast(context, numericId, intent, flags);
-alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, scheduledAt, pendingIntent);
-```
-
-### Calculating Schedule Time
-
-For **relative** notifications, store the `interval` field (milliseconds) so reactivation works correctly:
-
-```typescript
-// When creating
-const intervalMs = parseRelativeTime(time); // e.g., "1 hour" → 3600000
-notification.interval = intervalMs;
-
-// When reactivating
-const newScheduledAt = Date.now() + notification.interval;
-```
-
-For **absolute** notifications, calculate next occurrence:
-```typescript
-if (targetTime <= now) {
-  targetTime.setDate(targetTime.getDate() + 1); // Schedule for tomorrow
-}
-```
-
-### Widget Refresh
-
-Widget auto-refreshes every 5 minutes via AlarmManager (see `QuickNotifWidgetProvider.java:300-315`). To force refresh:
-```java
-Intent refreshIntent = new Intent(context, QuickNotifWidgetProvider.class);
-refreshIntent.setAction(ACTION_REFRESH);
-context.sendBroadcast(refreshIntent);
-```
-
-Or from TypeScript, trigger via storage change:
-```typescript
-await notificationService.saveToStorage(); // Widget polls storage every 5 min
-```
-
-## Android-Specific Considerations
-
-### AlarmManager & Battery Optimization
-
-- Android 12+ requires `SCHEDULE_EXACT_ALARM` permission
-- Battery optimization MUST be disabled for reliable exact alarms
-- Use `setExactAndAllowWhileIdle()` for alarms that should fire even in Doze mode
-
-### Manufacturer-Specific Settings
-
-Different manufacturers have different auto-start permission systems (see `MainActivity.java:84-164`):
-- Xiaomi/Redmi: MIUI Security Center
-- OPPO/OnePlus: ColorOS Safe Center
-- Vivo: Permission Manager
-- Huawei/Honor: System Manager
-- Samsung: No auto-start (use battery settings)
-- ASUS, LeTV: Custom managers
-
-### Widget Update Limits
-
-- Widgets have limited update frequency
-- Use `notifyAppWidgetViewDataChanged()` to refresh ListView data without full update
-- Avoid excessive updates to preserve battery
 
 ## Debugging
 
