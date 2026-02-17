@@ -2,6 +2,7 @@ import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import notificationLogger from './notificationLogger';
+import { toNumericId } from '@/utils/notificationUtils';
 
 // Android bridge type definitions
 declare global {
@@ -41,15 +42,65 @@ export class NotificationService {
     onPermissionDenied?: () => void;
   } = {};
 
-  // Stable numeric ID generator to avoid collisions
-  toNumericId(id: string): number {
-    let hash = 5381;
-    for (let i = 0; i < id.length; i++) {
-      hash = ((hash << 5) + hash) ^ id.charCodeAt(i);
+  /**
+   * Parse relative time string like "15 minutes" or "2 hours 30 minutes"
+   * @returns milliseconds
+   */
+  private parseRelativeTimeToMs(time: string): number {
+    const parts = time.toLowerCase().split(' ');
+    let totalMinutes = 0;
+
+    for (let i = 0; i < parts.length; i += 2) {
+      const value = parseInt(parts[i]);
+      const unit = parts[i + 1] || '';
+      if (Number.isFinite(value)) {
+        if (unit.includes('hour')) totalMinutes += value * 60;
+        else if (unit.includes('minute')) totalMinutes += value;
+      }
     }
-    // Ensure positive 31-bit integer (Android requires non-zero int)
-    const n = Math.abs(hash) % 2147483646 + 1;
-    return n;
+
+    return totalMinutes * 60 * 1000;
+  }
+
+  /**
+   * Schedule notification with Android's LocalNotifications plugin
+   */
+  private async scheduleLocalNotification(
+    id: string,
+    name: string,
+    scheduledAt: Date
+  ): Promise<void> {
+    const atDate = scheduledAt.getTime() <= Date.now() + 500
+      ? new Date(Date.now() + 1000)
+      : scheduledAt;
+
+    await LocalNotifications.schedule({
+      notifications: [{
+        title: 'Quick Notif',
+        body: name,
+        id: toNumericId(id),
+        schedule: {
+          at: atDate,
+          allowWhileIdle: true,
+          repeats: false
+        },
+        channelId: 'timer-alerts',
+        attachments: undefined,
+        actionTypeId: '',
+        extra: {
+          wakeUp: true,
+          exactTiming: true
+        },
+        ongoing: false,
+        autoCancel: true,
+        largeBody: name,
+        summaryText: '',
+        smallIcon: 'ic_stat_notification',
+        largeIcon: '',
+        iconColor: '#6366F1',
+        threadIdentifier: 'quick-notif'
+      }]
+    });
   }
 
   static getInstance(): NotificationService {
@@ -239,19 +290,7 @@ export class NotificationService {
     const scheduledAt = this.calculateScheduleTime(time, type);
 
     // Store interval (ms) for relative notifications so the widget can reactivate correctly
-    const intervalMs = type === 'relative' ? (() => {
-      const parts = time.toLowerCase().split(' ');
-      let totalMinutes = 0;
-      for (let i = 0; i < parts.length; i += 2) {
-        const value = parseInt(parts[i]);
-        const unit = parts[i + 1] || '';
-        if (Number.isFinite(value)) {
-          if (unit.includes('hour')) totalMinutes += value * 60;
-          else if (unit.includes('minute')) totalMinutes += value;
-        }
-      }
-      return totalMinutes * 60 * 1000;
-    })() : undefined;
+    const intervalMs = type === 'relative' ? this.parseRelativeTimeToMs(time) : undefined;
 
     const notification: NotificationItem = {
       id,
@@ -270,35 +309,8 @@ export class NotificationService {
     await notificationLogger.logSchedule(id, name, scheduledAt.getTime(), type);
 
     if (Capacitor.isNativePlatform()) {
-      const atDate = scheduledAt.getTime() <= Date.now() + 500 ? new Date(Date.now() + 1000) : scheduledAt;
       try {
-        await LocalNotifications.schedule({
-          notifications: [{
-            title: 'Quick Notif',
-            body: name,
-            id: this.toNumericId(id),
-            schedule: {
-              at: atDate,
-              allowWhileIdle: true,
-              repeats: false
-            },
-            channelId: 'timer-alerts',
-            attachments: undefined,
-            actionTypeId: '',
-            extra: {
-              wakeUp: true,
-              exactTiming: true
-            },
-            ongoing: false,
-            autoCancel: true,
-            largeBody: name,
-            summaryText: '',
-            smallIcon: 'ic_stat_notification',
-            largeIcon: '',
-            iconColor: '#6366F1',
-            threadIdentifier: 'quick-notif'
-          }]
-        });
+        await this.scheduleLocalNotification(id, name, scheduledAt);
 
         // Verify and log result
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -306,7 +318,7 @@ export class NotificationService {
 
         // Verify it was actually scheduled
         const pending = await LocalNotifications.getPending();
-        const wasScheduled = pending.notifications.some(n => n.id === this.toNumericId(id));
+        const wasScheduled = pending.notifications.some(n => n.id === toNumericId(id));
 
         if (!wasScheduled) {
           throw new Error('Notification was not added to pending list');
@@ -336,7 +348,7 @@ export class NotificationService {
     notification.updatedAt = new Date();
 
     if (Capacitor.isNativePlatform()) {
-      const numericId = this.toNumericId(id);
+      const numericId = toNumericId(id);
 
       if (notification.enabled) {
         const atDate = notification.scheduledAt.getTime() <= Date.now()
@@ -344,33 +356,7 @@ export class NotificationService {
           : notification.scheduledAt;
         notification.scheduledAt = atDate;
         try {
-          await LocalNotifications.schedule({
-            notifications: [{
-              title: 'Quick Notif',
-              body: notification.name,
-              id: numericId,
-              schedule: {
-                at: atDate,
-                allowWhileIdle: true,
-                repeats: false
-              },
-              channelId: 'timer-alerts',
-              attachments: undefined,
-              actionTypeId: '',
-              extra: {
-                wakeUp: true,
-                exactTiming: true
-              },
-              ongoing: false,
-              autoCancel: true,
-              largeBody: notification.name,
-              summaryText: '',
-              smallIcon: 'ic_stat_notification',
-              largeIcon: '',
-              iconColor: '#6366F1',
-              threadIdentifier: 'quick-notif'
-            }]
-          });
+          await this.scheduleLocalNotification(id, notification.name, atDate);
         } catch (e) {
           console.error('Scheduling (toggle) failed', e);
         }
@@ -389,7 +375,7 @@ export class NotificationService {
 
   async deleteNotification(id: string): Promise<void> {
     if (Capacitor.isNativePlatform()) {
-      const numericId = this.toNumericId(id);
+      const numericId = toNumericId(id);
       // Cancel Capacitor notification
       await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
       // Also cancel AlarmManager alarm (in case it was scheduled by widget)
@@ -413,7 +399,7 @@ export class NotificationService {
 
     // Cancel existing notification if it exists
     if (Capacitor.isNativePlatform()) {
-      const numericId = this.toNumericId(id);
+      const numericId = toNumericId(id);
       // Cancel Capacitor notification
       await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
       // Also cancel AlarmManager alarm (in case it was scheduled by widget)
@@ -428,17 +414,7 @@ export class NotificationService {
     notification.scheduledAt = this.calculateScheduleTime(time, type);
     // Update interval for relative notifications so reactivation uses the same duration
     if (type === 'relative') {
-      const parts = time.toLowerCase().split(' ');
-      let totalMinutes = 0;
-      for (let i = 0; i < parts.length; i += 2) {
-        const value = parseInt(parts[i]);
-        const unit = parts[i + 1] || '';
-        if (Number.isFinite(value)) {
-          if (unit.includes('hour')) totalMinutes += value * 60;
-          else if (unit.includes('minute')) totalMinutes += value;
-        }
-      }
-      notification.interval = totalMinutes * 60 * 1000;
+      notification.interval = this.parseRelativeTimeToMs(time);
     } else {
       notification.interval = undefined;
     }
@@ -447,38 +423,11 @@ export class NotificationService {
 
     // Schedule the updated notification
     if (Capacitor.isNativePlatform()) {
-      const numericId = this.toNumericId(id);
       const atDate = notification.scheduledAt.getTime() <= Date.now() + 500
         ? new Date(Date.now() + 1000)
         : notification.scheduledAt;
       try {
-        await LocalNotifications.schedule({
-          notifications: [{
-            title: 'Quick Notif',
-            body: notification.name,
-            id: numericId,
-            schedule: {
-              at: atDate,
-              allowWhileIdle: true,
-              repeats: false
-            },
-            channelId: 'timer-alerts',
-            attachments: undefined,
-            actionTypeId: '',
-            extra: {
-              wakeUp: true,
-              exactTiming: true
-            },
-            ongoing: false,
-            autoCancel: true,
-            largeBody: notification.name,
-            summaryText: '',
-            smallIcon: 'ic_stat_notification',
-            largeIcon: '',
-            iconColor: '#6366F1',
-            threadIdentifier: 'quick-notif'
-          }]
-        });
+        await this.scheduleLocalNotification(id, notification.name, atDate);
       } catch (e) {
         console.error('Scheduling (update) failed', e);
       }
@@ -525,21 +474,8 @@ export class NotificationService {
       return targetTime;
     } else {
       // Parse relative time like "15 minutes", "1 hour", "2 hours 30 minutes"
-      const parts = time.toLowerCase().split(' ');
-      let totalMinutes = 0;
-
-      for (let i = 0; i < parts.length; i += 2) {
-        const value = parseInt(parts[i]);
-        const unit = parts[i + 1];
-
-        if (unit.includes('hour')) {
-          totalMinutes += value * 60;
-        } else if (unit.includes('minute')) {
-          totalMinutes += value;
-        }
-      }
-
-      const targetTime = new Date(now.getTime() + totalMinutes * 60 * 1000);
+      const totalMs = this.parseRelativeTimeToMs(time);
+      const targetTime = new Date(now.getTime() + totalMs);
       return targetTime;
     }
   }
@@ -607,7 +543,7 @@ export class NotificationService {
   
   try {
     const pending = await LocalNotifications.getPending();
-    const numericId = this.toNumericId(id);
+    const numericId = toNumericId(id);
     
     const exists = pending.notifications.some(n => n.id === numericId);
     
