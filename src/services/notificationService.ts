@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { Preferences } from '@capacitor/preferences';
 import notificationLogger from './notificationLogger';
 import { toNumericId } from '@/utils/notificationUtils';
+import { NOTIFICATION_CONFIG } from '@/constants/notifications';
 
 // Android bridge type definitions
 declare global {
@@ -82,13 +83,13 @@ export class NotificationService {
     name: string,
     scheduledAt: Date
   ): Promise<void> {
-    const atDate = scheduledAt.getTime() <= Date.now() + 500
-      ? new Date(Date.now() + 1000)
+    const atDate = scheduledAt.getTime() <= Date.now() + NOTIFICATION_CONFIG.MIN_SCHEDULE_DELAY_MS
+      ? new Date(Date.now() + NOTIFICATION_CONFIG.FALLBACK_DELAY_MS)
       : scheduledAt;
 
     await LocalNotifications.schedule({
       notifications: [{
-        title: 'Quick Notif',
+        title: NOTIFICATION_CONFIG.TITLE,
         body: name,
         id: toNumericId(id),
         schedule: {
@@ -96,7 +97,7 @@ export class NotificationService {
           allowWhileIdle: true,
           repeats: false
         },
-        channelId: 'timer-alerts',
+        channelId: NOTIFICATION_CONFIG.CHANNEL_ID,
         attachments: undefined,
         actionTypeId: '',
         extra: {
@@ -107,10 +108,10 @@ export class NotificationService {
         autoCancel: true,
         largeBody: name,
         summaryText: '',
-        smallIcon: 'ic_stat_notification',
-        largeIcon: '',
-        iconColor: '#6366F1',
-        threadIdentifier: 'quick-notif'
+        smallIcon: NOTIFICATION_CONFIG.SMALL_ICON,
+        largeIcon: NOTIFICATION_CONFIG.LARGE_ICON,
+        iconColor: NOTIFICATION_CONFIG.ICON_COLOR,
+        threadIdentifier: NOTIFICATION_CONFIG.THREAD_ID
       }]
     });
   }
@@ -270,14 +271,14 @@ export class NotificationService {
     try {
       // Always recreate channel (idempotent operation)
       await LocalNotifications.createChannel({
-        id: 'timer-alerts',
-        name: 'Quick Notif',
-        description: 'Critical timer notifications',
-        importance: 5,
-        visibility: 1,
+        id: NOTIFICATION_CONFIG.CHANNEL_ID,
+        name: NOTIFICATION_CONFIG.CHANNEL_NAME,
+        description: NOTIFICATION_CONFIG.CHANNEL_DESCRIPTION,
+        importance: NOTIFICATION_CONFIG.CHANNEL_IMPORTANCE,
+        visibility: NOTIFICATION_CONFIG.CHANNEL_VISIBILITY,
         vibration: true,
         lights: true,
-        lightColor: '#6366F1',
+        lightColor: NOTIFICATION_CONFIG.ICON_COLOR,
         sound: 'default' // Add sound
       });
     } catch (e) {
@@ -427,11 +428,8 @@ export class NotificationService {
 
     // Schedule the updated notification
     if (Capacitor.isNativePlatform()) {
-      const atDate = notification.scheduledAt.getTime() <= Date.now() + 500
-        ? new Date(Date.now() + 1000)
-        : notification.scheduledAt;
       try {
-        await this.scheduleLocalNotification(id, notification.name, atDate);
+        await this.scheduleLocalNotification(id, notification.name, notification.scheduledAt);
       } catch (e) {
         console.error('Scheduling (update) failed', e);
       }
@@ -487,8 +485,8 @@ export class NotificationService {
   private addToSavedNames(name: string): void {
     if (!this.savedNames.includes(name)) {
       this.savedNames.unshift(name);
-      // Keep only the 10 most recent names
-      this.savedNames = this.savedNames.slice(0, 10);
+      // Keep only the most recent names
+      this.savedNames = this.savedNames.slice(0, NOTIFICATION_CONFIG.MAX_SAVED_NAMES);
     } else {
       // Move to front if already exists
       this.savedNames = [name, ...this.savedNames.filter(n => n !== name)];
