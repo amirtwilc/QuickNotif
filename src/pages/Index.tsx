@@ -13,7 +13,7 @@ import { DebugLogViewer } from '@/components/DebugLogViewer';
 import notificationLogger from '@/services/notificationLogger';
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { App } from '@capacitor/app';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, PluginListenerHandle } from '@capacitor/core';
 
 const Index = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -68,7 +68,7 @@ const Index = () => {
 
     // Listen for app state changes (resume from background)
     // This auto-refreshes data when returning from widget interaction
-    let appStateListener: any = null;
+    let appStateListener: PluginListenerHandle | null = null;
     if (Capacitor.isNativePlatform()) {
       appStateListener = App.addListener('appStateChange', async (state) => {
         if (state.isActive) {
@@ -88,11 +88,11 @@ const Index = () => {
         appStateListener.remove();
       }
     };
-  }, []);
+  }, [notificationService, refreshData, toast]);
 
   const handlePermissionContinue = async () => {
     switch (permissionStep) {
-      case 'notification':
+      case 'notification': {
         const granted = await notificationService.requestNotificationPermission();
         if (granted) {
           // Move to battery check
@@ -100,6 +100,7 @@ const Index = () => {
         }
         // If not granted, the callback will handle showing error
         break;
+      }
 
       case 'battery':
         await notificationService.openBatterySettings();

@@ -30,6 +30,18 @@ export interface NotificationItem {
   interval?: number;
 }
 
+interface StoredNotification {
+  id: string;
+  name: string;
+  time: string;
+  type: 'absolute' | 'relative';
+  enabled: boolean;
+  scheduledAt: string;
+  updatedAt?: string;
+  createdAt?: string;
+  interval?: number;
+}
+
 export type PermissionStep = 'notification' | 'battery' | 'autostart' | 'complete';
 
 export class NotificationService {
@@ -149,9 +161,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return false;
 
     try {
-      // @ts-ignore - accessing Android-specific API
-      if (window.Android && window.Android.isBatteryOptimized) {
-        // @ts-ignore
+      if (window.Android?.isBatteryOptimized) {
         return window.Android.isBatteryOptimized();
       }
     } catch (e) {
@@ -197,9 +207,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
-      // @ts-ignore - accessing Android-specific API
-      if (window.Android && window.Android.openBatterySettings) {
-        // @ts-ignore
+      if (window.Android?.openBatterySettings) {
         window.Android.openBatterySettings();
       }
     } catch (e) {
@@ -217,9 +225,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
-      // @ts-ignore - accessing Android-specific API
-      if (window.Android && window.Android.openAutoStartSettings) {
-        // @ts-ignore
+      if (window.Android?.openAutoStartSettings) {
         const opened = window.Android.openAutoStartSettings();
         if (!opened) {
           // Fallback to app settings if manufacturer-specific settings not available
@@ -240,9 +246,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
-      // @ts-ignore - accessing Android-specific API
-      if (window.Android && window.Android.openAppSettings) {
-        // @ts-ignore
+      if (window.Android?.openAppSettings) {
         window.Android.openAppSettings();
       }
     } catch (e) {
@@ -510,7 +514,7 @@ export class NotificationService {
       const { value: savedNamesValue } = await Preferences.get({ key: 'savedNames' });
 
       if (notificationsValue) {
-        this.notifications = JSON.parse(notificationsValue).map((n: any) => ({
+        this.notifications = JSON.parse(notificationsValue).map((n: StoredNotification) => ({
           ...n,
           scheduledAt: new Date(n.scheduledAt),
           updatedAt: new Date(n.updatedAt || n.createdAt || new Date())
@@ -525,7 +529,7 @@ export class NotificationService {
       const savedNamesStorage = localStorage.getItem('savedNames');
 
       if (savedNotifications) {
-        this.notifications = JSON.parse(savedNotifications).map((n: any) => ({
+        this.notifications = JSON.parse(savedNotifications).map((n: StoredNotification) => ({
           ...n,
           scheduledAt: new Date(n.scheduledAt),
           updatedAt: new Date(n.updatedAt || n.createdAt || new Date())

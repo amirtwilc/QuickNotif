@@ -2,6 +2,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { toNumericId } from '@/utils/notificationUtils';
+import type { NotificationItem } from './notificationService';
 
 export interface LogEntry {
   timestamp: string;
@@ -12,7 +13,7 @@ export interface LogEntry {
   message: string;
   androidPendingCount?: number;
   appNotificationCount?: number;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 class NotificationLogger {
@@ -211,15 +212,15 @@ class NotificationLogger {
     });
   }
 
-  async logError(message: string, error: any, notificationId?: string) {
+  async logError(message: string, error: unknown, notificationId?: string) {
     await this.log({
       timestamp: new Date().toISOString(),
       type: 'ERROR',
       notificationId,
       message: `❌ ERROR: ${message}`,
       details: {
-        error: error?.message || String(error),
-        stack: error?.stack
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       }
     });
   }
@@ -245,27 +246,27 @@ class NotificationLogger {
 
           // Format orphaned notifications
           orphanedDetails = orphaned.map(id => {
-              const notif = allNotifications.find((n: any) => n.id === id);
+              const notif = allNotifications.find((n: NotificationItem) => n.id === id);
               return notif ? `${notif.name || 'Unnamed'} (${id})` : id;
           });
 
           // Format missing notifications (numeric IDs)
           missingDetails = missing.map(numericId => {
               // Find notification by converting string IDs to numeric and matching
-              const notif = allNotifications.find((n: any) => toNumericId(n.id) === numericId);
+              const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
               return notif ? `${notif.name || 'Unnamed'} (${numericId})` : `Unknown (${numericId})`;
           });
 
           // Format allAppIds with names
           allAppIdsWithNames = allAppIds.map(id => {
-              const notif = allNotifications.find((n: any) => n.id === id);
+              const notif = allNotifications.find((n: NotificationItem) => n.id === id);
               const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
               return `${id} (${name})`;
           });
 
           // Format allAndroidIds with names
           allAndroidIdsWithNames = allAndroidIds.map(numericId => {
-              const notif = allNotifications.find((n: any) => toNumericId(n.id) === numericId);
+              const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
               const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
               return `${numericId} (${name})`;
           });

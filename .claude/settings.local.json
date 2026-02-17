@@ -14,7 +14,8 @@
       "mcp__voice-hooks__speak",
       "mcp__voice-hooks__get_last_message",
       "Bash(python:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(npm run lint:*)"
     ]
   },
   "hooks": {

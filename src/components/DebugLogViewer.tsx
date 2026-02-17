@@ -9,9 +9,21 @@ import { Capacitor } from '@capacitor/core';
 import notificationLogger from '@/services/notificationLogger';
 import { toast } from '@/hooks/use-toast';
 
+interface LogStatistics {
+  totalEntries: number;
+  schedules: number;
+  verifications: number;
+  fires: number;
+  deletes: number;
+  errors: number;
+  systemChecks: number;
+  verificationFailures: number;
+  orphanedNotifications: number;
+}
+
 export const DebugLogViewer: React.FC = () => {
   const [logContent, setLogContent] = useState<string>('');
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<LogStatistics | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
