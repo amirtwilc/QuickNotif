@@ -17,9 +17,18 @@ android {
         }
     }
     buildTypes {
+        debug {
+            enableUnitTestCoverage true
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
         }
     }
 }
@@ -37,6 +46,11 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.robolectric:robolectric:4.12.2"
+    testImplementation "org.mockito:mockito-core:5.14.2"
+    testImplementation "androidx.test:core:1.6.1"
+    testImplementation "androidx.test:rules:1.6.1"
+    testImplementation "androidx.test.ext:junit:1.2.1"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
