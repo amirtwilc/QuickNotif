@@ -1,6 +1,8 @@
 // src/services/notificationLogger.ts
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { toNumericId } from '@/utils/notificationUtils';
+import type { NotificationItem } from './notificationService';
 
 export interface LogEntry {
   timestamp: string;
@@ -11,13 +13,13 @@ export interface LogEntry {
   message: string;
   androidPendingCount?: number;
   appNotificationCount?: number;
-  details?: any;
+  details?: Record<string, unknown>;
 }
 
 class NotificationLogger {
   private static instance: NotificationLogger;
   private logBuffer: LogEntry[] = [];
-  private DEBUG_MODE = true; // ⚠️ SET TO FALSE FOR PRODUCTION
+  private DEBUG_MODE = false; // Production mode
   private intervalId: number | null = null;
   private LOG_FILE = 'notification_debug.log';
   private CHECK_INTERVAL = 60 * 1000; // 1 minute
@@ -34,15 +36,6 @@ class NotificationLogger {
       NotificationLogger.instance = new NotificationLogger();
     }
     return NotificationLogger.instance;
-  }
-
-  // Copied from NotificationService for consistency
-  private toNumericId(id: string): number {
-    let hash = 5381;
-    for (let i = 0; i < id.length; i++) {
-      hash = ((hash << 5) + hash) ^ id.charCodeAt(i);
-    }
-    return Math.abs(hash) % 2147483646 + 1;
   }
 
   private async initializeLogger() {
@@ -219,15 +212,15 @@ class NotificationLogger {
     });
   }
 
-  async logError(message: string, error: any, notificationId?: string) {
+  async logError(message: string, error: unknown, notificationId?: string) {
     await this.log({
       timestamp: new Date().toISOString(),
       type: 'ERROR',
       notificationId,
       message: `❌ ERROR: ${message}`,
       details: {
-        error: error?.message || String(error),
-        stack: error?.stack
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       }
     });
   }
@@ -253,27 +246,27 @@ class NotificationLogger {
 
           // Format orphaned notifications
           orphanedDetails = orphaned.map(id => {
-              const notif = allNotifications.find((n: any) => n.id === id);
+              const notif = allNotifications.find((n: NotificationItem) => n.id === id);
               return notif ? `${notif.name || 'Unnamed'} (${id})` : id;
           });
 
           // Format missing notifications (numeric IDs)
           missingDetails = missing.map(numericId => {
               // Find notification by converting string IDs to numeric and matching
-              const notif = allNotifications.find((n: any) => this.toNumericId(n.id) === numericId);
+              const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
               return notif ? `${notif.name || 'Unnamed'} (${numericId})` : `Unknown (${numericId})`;
           });
 
           // Format allAppIds with names
           allAppIdsWithNames = allAppIds.map(id => {
-              const notif = allNotifications.find((n: any) => n.id === id);
+              const notif = allNotifications.find((n: NotificationItem) => n.id === id);
               const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
               return `${id} (${name})`;
           });
 
           // Format allAndroidIds with names
           allAndroidIdsWithNames = allAndroidIds.map(numericId => {
-              const notif = allNotifications.find((n: any) => this.toNumericId(n.id) === numericId);
+              const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
               const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
               return `${numericId} (${name})`;
           });
@@ -354,7 +347,7 @@ class NotificationLogger {
       for (const appNotif of appNotifications) {
         if (appNotif.enabled && appNotif.scheduledAt.getTime() > Date.now()) {
           allAppIds.push(appNotif.id);
-          allNumericIds.push(this.toNumericId(appNotif.id));
+          allNumericIds.push(toNumericId(appNotif.id));
         }
       }
 
@@ -379,7 +372,7 @@ class NotificationLogger {
       const orphaned: string[] = [];
       for (const appNotif of appNotifications) {
         if (appNotif.enabled && appNotif.scheduledAt.getTime() > Date.now()) {
-          const numericId = this.toNumericId(appNotif.id);
+          const numericId = toNumericId(appNotif.id);
           const isScheduled = allScheduledIds.includes(numericId);
 
           if (!isScheduled) {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { NotificationService, PermissionStep } from "@/services/notificationService";
 import { NotificationItem } from "@/services/notificationService";
 import { Bell } from "lucide-react";
@@ -13,7 +13,7 @@ import { DebugLogViewer } from '@/components/DebugLogViewer';
 import notificationLogger from '@/services/notificationLogger';
 import PullToRefresh from 'react-simple-pull-to-refresh';
 import { App } from '@capacitor/app';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, PluginListenerHandle } from '@capacitor/core';
 
 const Index = () => {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -27,6 +27,11 @@ const Index = () => {
   const [showDebug, setShowDebug] = useState(false);
 
   const notificationService = NotificationService.getInstance();
+
+  const refreshData = useCallback(() => {
+    setNotifications(notificationService.getNotifications());
+    setSavedNames(notificationService.getSavedNames());
+  }, [notificationService]);
 
   useEffect(() => {
     const initializeService = async () => {
@@ -61,23 +66,16 @@ const Index = () => {
 
     initializeService();
 
-    // Check for expired notifications every 5 seconds when app is active
-    const interval = setInterval(() => {
-      const updatedNotifications = notificationService.getNotifications();
-      setNotifications(updatedNotifications);
-    }, 5000);
-
     // Listen for app state changes (resume from background)
     // This auto-refreshes data when returning from widget interaction
-    let appStateListener: any = null;
+    let appStateListener: PluginListenerHandle | null = null;
     if (Capacitor.isNativePlatform()) {
       appStateListener = App.addListener('appStateChange', async (state) => {
         if (state.isActive) {
           // App came to foreground - refresh data from storage
           try {
             await notificationService.refresh();
-            setNotifications(notificationService.getNotifications());
-            setSavedNames(notificationService.getSavedNames());
+            refreshData();
           } catch (error) {
             console.error('Failed to refresh on app resume:', error);
           }
@@ -86,16 +84,15 @@ const Index = () => {
     }
 
     return () => {
-      clearInterval(interval);
       if (appStateListener) {
         appStateListener.remove();
       }
     };
-  }, []);
+  }, [notificationService, refreshData, toast]);
 
   const handlePermissionContinue = async () => {
     switch (permissionStep) {
-      case 'notification':
+      case 'notification': {
         const granted = await notificationService.requestNotificationPermission();
         if (granted) {
           // Move to battery check
@@ -103,6 +100,7 @@ const Index = () => {
         }
         // If not granted, the callback will handle showing error
         break;
+      }
 
       case 'battery':
         await notificationService.openBatterySettings();
@@ -144,7 +142,7 @@ const Index = () => {
     }
   };
 
-  const handleScheduleNotification = async (time: string, type: 'absolute' | 'relative') => {
+  const handleScheduleNotification = useCallback(async (time: string, type: 'absolute' | 'relative') => {
     if (!notificationName.trim()) {
       setPendingSchedule({ time, type });
       setShowEmptyNameDialog(true);
@@ -153,8 +151,7 @@ const Index = () => {
 
     try {
       await notificationService.scheduleNotification(notificationName.trim(), time, type);
-      setNotifications(notificationService.getNotifications());
-      setSavedNames(notificationService.getSavedNames());
+      refreshData();
       setNotificationName('');
 
       toast({
@@ -168,14 +165,13 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [notificationName, notificationService, refreshData, toast]);
 
-  const handleConfirmEmptyName = async () => {
+  const handleConfirmEmptyName = useCallback(async () => {
     if (pendingSchedule) {
       try {
         await notificationService.scheduleNotification('', pendingSchedule.time, pendingSchedule.type);
-        setNotifications(notificationService.getNotifications());
-        setSavedNames(notificationService.getSavedNames());
+        refreshData();
         setNotificationName('');
 
         toast({
@@ -192,13 +188,13 @@ const Index = () => {
     }
     setShowEmptyNameDialog(false);
     setPendingSchedule(null);
-  };
+  }, [pendingSchedule, notificationService, refreshData, toast]);
 
-  const handleToggleNotification = async (id: string) => {
+  const handleToggleNotification = useCallback(async (id: string) => {
     try {
       const notification = notifications.find(n => n.id === id);
       await notificationService.toggleNotification(id);
-      setNotifications(notificationService.getNotifications());
+      refreshData();
 
       toast({
         title: !notification?.enabled ? "Notification Disabled" : "Notification Enabled",
@@ -211,13 +207,13 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [notifications, notificationService, refreshData, toast]);
 
-  const handleEditNotification = async (id: string, time: string, type: 'absolute' | 'relative') => {
+  const handleEditNotification = useCallback(async (id: string, time: string, type: 'absolute' | 'relative') => {
     try {
       const notification = notifications.find(n => n.id === id);
       await notificationService.updateNotificationTime(id, time, type);
-      setNotifications(notificationService.getNotifications());
+      refreshData();
 
       toast({
         title: "Notification Updated",
@@ -230,13 +226,13 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [notifications, notificationService, refreshData, toast]);
 
-  const handleDeleteNotification = async (id: string) => {
+  const handleDeleteNotification = useCallback(async (id: string) => {
     try {
       const notification = notifications.find(n => n.id === id);
       await notificationService.deleteNotification(id);
-      setNotifications(notificationService.getNotifications());
+      refreshData();
 
       toast({
         title: "Notification Deleted",
@@ -249,13 +245,13 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [notifications, notificationService, refreshData, toast]);
 
-  const handleReactivateNotification = async (id: string) => {
+  const handleReactivateNotification = useCallback(async (id: string) => {
     try {
       const notification = notifications.find(n => n.id === id);
       await notificationService.reactivateNotification(id);
-      setNotifications(notificationService.getNotifications());
+      refreshData();
 
       toast({
         title: "Notification Reactivated",
@@ -268,9 +264,9 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [notifications, notificationService, refreshData, toast]);
 
-  const handleClearExpired = async () => {
+  const handleClearExpired = useCallback(async () => {
     try {
       const now = Date.now();
       const expired = notifications.filter(n => n.scheduledAt.getTime() < now);
@@ -284,7 +280,7 @@ const Index = () => {
       }
 
       await Promise.all(expired.map(n => notificationService.deleteNotification(n.id)));
-      setNotifications(notificationService.getNotifications());
+      refreshData();
 
       toast({
         title: "Expired cleared",
@@ -297,17 +293,16 @@ const Index = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [notifications, notificationService, refreshData, toast]);
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
     try {
       await notificationService.refresh();
-      setNotifications(notificationService.getNotifications());
-      setSavedNames(notificationService.getSavedNames());
+      refreshData();
     } catch (error) {
       console.error('Failed to refresh notifications:', error);
     }
-  };
+  }, [notificationService, refreshData]);
 
   return (
     <div className="min-h-screen p-4 max-w-md mx-auto">

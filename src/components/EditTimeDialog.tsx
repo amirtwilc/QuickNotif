@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -27,19 +27,7 @@ export const EditTimeDialog: React.FC<EditTimeDialogProps> = ({
   currentTime,
   currentType
 }) => {
-  const [pendingTime, setPendingTime] = useState<string>('');
-  const [pendingType, setPendingType] = useState<'absolute' | 'relative'>('absolute');
-
-  useEffect(() => {
-    if (open) {
-      setPendingTime(currentTime);
-      setPendingType(currentType);
-    }
-  }, [open, currentTime, currentType]);
-
   const handleSubmit = (time: string, type: 'absolute' | 'relative') => {
-    setPendingTime(time);
-    setPendingType(type);
     onSave(time, type);
     onOpenChange(false);
   };
