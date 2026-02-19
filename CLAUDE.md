@@ -23,20 +23,31 @@ npm run lint         # Run ESLint
 npm run preview      # Preview production build
 ```
 
+**Testing:**
+```bash
+npm test                 # Run all tests once (required before every APK build)
+npm run test:watch       # Run tests in watch mode during development
+npm run test:coverage    # Run tests with coverage report
+```
+
 **Android Development:**
 ```bash
 # CRITICAL: After making ANY changes to the project, run this sequence:
+npm test                         # Run tests first — fix any failures before proceeding
 npm run build                    # Build web assets
 npx cap sync android            # Sync to Android project
 cd android && ./gradlew assembleDebug  # Create APK
 cp android/app/build/outputs/apk/debug/app-debug.apk QuickNotif-latest.apk  # Copy APK to root
 ```
 
-**Important:** ALWAYS run the full build sequence (`npm run build` → `npx cap sync android` → `gradlew assembleDebug` → `cp APK to root`) after making changes. This ensures:
-1. Web assets are built with latest code
-2. Changes are synced to the Android project
-3. A new APK is generated for testing
-4. The latest APK is copied to the root folder as `QuickNotif-latest.apk` for easy access
+**Important:** ALWAYS run the full build sequence (`npm test` → `npm run build` → `npx cap sync android` → `gradlew assembleDebug` → `cp APK to root`) after making changes. This ensures:
+1. Tests pass — no regressions in React/TypeScript logic
+2. Web assets are built with latest code
+3. Changes are synced to the Android project
+4. A new APK is generated for testing
+5. The latest APK is copied to the root folder as `QuickNotif-latest.apk` for easy access
+
+**CRITICAL:** Never build the APK if `npm test` fails. Fix failing tests first.
 
 ## Architecture
 
