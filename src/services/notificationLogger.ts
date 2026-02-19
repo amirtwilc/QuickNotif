@@ -19,7 +19,7 @@ export interface LogEntry {
 class NotificationLogger {
   private static instance: NotificationLogger;
   private logBuffer: LogEntry[] = [];
-  private DEBUG_MODE = false; // Production mode
+  private DEBUG_MODE = true; // Production mode
   private intervalId: number | null = null;
   private LOG_FILE = 'notification_debug.log';
   private CHECK_INTERVAL = 60 * 1000; // 1 minute
