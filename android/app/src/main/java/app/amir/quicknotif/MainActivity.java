@@ -12,9 +12,6 @@ import android.os.PowerManager;
 import android.provider.Settings;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebView;
-
-import androidx.annotation.RequiresApi;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -23,14 +20,14 @@ import org.json.JSONException;
 
 public class MainActivity extends BridgeActivity {
 
+    private static final String TAG = "QuickNotif";
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         // Request exact alarm permission on Android 12+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            requestExactAlarmPermission();
-        }
+        requestExactAlarmPermission();
 
         // Add JavaScript interface to allow web app to call native methods
         bridge.getWebView().addJavascriptInterface(new WebAppInterface(), "Android");
@@ -55,7 +52,7 @@ public class MainActivity extends BridgeActivity {
                     return !pm.isIgnoringBatteryOptimizations(getPackageName());
                 }
             }
-            return false; // For older versions, assume it's fine
+            return false;
         }
 
         @JavascriptInterface
@@ -63,24 +60,19 @@ public class MainActivity extends BridgeActivity {
             Intent intent = new Intent();
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                // For Android 6.0 and above, open battery optimization settings
                 intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
                 intent.setData(Uri.parse("package:" + getPackageName()));
-
                 try {
                     startActivity(intent);
                 } catch (Exception e) {
-                    // If the specific battery optimization settings fail, try general battery settings
                     try {
                         intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
                         startActivity(intent);
                     } catch (Exception ex) {
-                        // Fallback to app settings if battery settings are not available
                         openAppSettings();
                     }
                 }
             } else {
-                // For older Android versions, just open app settings
                 openAppSettings();
             }
         }
@@ -92,17 +84,14 @@ public class MainActivity extends BridgeActivity {
             try {
                 Intent intent = new Intent();
 
-                // Different manufacturers have different auto-start settings
                 switch (manufacturer) {
                     case "xiaomi":
                     case "redmi":
-                        // Xiaomi/Redmi auto-start settings
                         intent.setComponent(new ComponentName("com.miui.securitycenter",
                                 "com.miui.permcenter.autostart.AutoStartManagementActivity"));
                         break;
 
                     case "oppo":
-                        // OPPO auto-start settings
                         try {
                             intent.setComponent(new ComponentName("com.coloros.safecenter",
                                     "com.coloros.safecenter.permission.startup.StartupAppListActivity"));
@@ -113,49 +102,41 @@ public class MainActivity extends BridgeActivity {
                         break;
 
                     case "vivo":
-                        // Vivo auto-start settings
                         intent.setComponent(new ComponentName("com.vivo.permissionmanager",
                                 "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"));
                         break;
 
                     case "huawei":
                     case "honor":
-                        // Huawei/Honor auto-start settings
                         intent.setComponent(new ComponentName("com.huawei.systemmanager",
                                 "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"));
                         break;
 
                     case "samsung":
-                        // Samsung - doesn't have traditional auto-start, open battery settings instead
                         openBatterySettings();
                         return true;
 
                     case "oneplus":
-                        // OnePlus auto-start settings
                         try {
                             intent.setComponent(new ComponentName("com.oneplus.security",
                                     "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity"));
                         } catch (Exception e) {
-                            // Fallback for older OnePlus
                             intent.setComponent(new ComponentName("com.coloros.safecenter",
                                     "com.coloros.safecenter.permission.startup.StartupAppListActivity"));
                         }
                         break;
 
                     case "asus":
-                        // ASUS auto-start settings
                         intent.setComponent(new ComponentName("com.asus.mobilemanager",
                                 "com.asus.mobilemanager.autostart.AutoStartActivity"));
                         break;
 
                     case "letv":
-                        // LeTV auto-start settings
                         intent.setComponent(new ComponentName("com.letv.android.letvsafe",
                                 "com.letv.android.letvsafe.AutobootManageActivity"));
                         break;
 
                     default:
-                        // For stock Android and unknown manufacturers, return false
                         return false;
                 }
 
@@ -163,7 +144,6 @@ public class MainActivity extends BridgeActivity {
                 return true;
 
             } catch (Exception e) {
-                // If manufacturer-specific settings don't work, return false
                 return false;
             }
         }
@@ -173,7 +153,6 @@ public class MainActivity extends BridgeActivity {
             Intent intent = new Intent();
             intent.setAction(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
             intent.setData(Uri.parse("package:" + getPackageName()));
-
             try {
                 startActivity(intent);
             } catch (Exception e) {
@@ -186,14 +165,14 @@ public class MainActivity extends BridgeActivity {
             try {
                 Intent intent = new Intent(MainActivity.this, NotificationReceiver.class);
                 PendingIntent pendingIntent = PendingIntent.getBroadcast(
-                    MainActivity.this,
-                    notificationId,
-                    intent,
-                    PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE
+                        MainActivity.this,
+                        notificationId,
+                        intent,
+                        PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE
                 );
                 return pendingIntent != null;
             } catch (Exception e) {
-                Log.e("QuickNotif", "Error checking alarm: " + e.getMessage());
+                Log.e(TAG, "Error checking alarm: " + e.getMessage());
                 return false;
             }
         }
@@ -213,31 +192,25 @@ public class MainActivity extends BridgeActivity {
 
                 return scheduled.toString();
             } catch (JSONException e) {
-                Log.e("QuickNotif", "Error checking alarms: " + e.getMessage());
+                Log.e(TAG, "Error checking alarms: " + e.getMessage());
                 return "[]";
             }
         }
 
-        /**
-         * Cancel an AlarmManager alarm directly (for alarms scheduled by widget)
-         * This is necessary because LocalNotifications.cancel() can't cancel alarms
-         * that were scheduled directly via AlarmManager
-         */
         @JavascriptInterface
         public void cancelAlarmManagerNotification(String notificationId) {
             try {
                 AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
                 if (alarmManager == null) {
-                    Log.e("QuickNotif", "AlarmManager is null");
+                    Log.e(TAG, "AlarmManager is null");
                     return;
                 }
 
-                // Create the same PendingIntent as used by widget scheduling
                 Intent notificationIntent = new Intent(MainActivity.this, NotificationReceiver.class);
                 notificationIntent.putExtra("notificationId", notificationId);
-                notificationIntent.putExtra("notificationName", ""); // Name doesn't matter for matching
+                notificationIntent.putExtra("notificationName", "");
 
-                int numericId = generateNumericId(notificationId);
+                int numericId = NotifUtils.generateNumericId(notificationId);
 
                 PendingIntent pendingIntent = PendingIntent.getBroadcast(
                         MainActivity.this,
@@ -246,35 +219,28 @@ public class MainActivity extends BridgeActivity {
                         PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
                 );
 
-                // Cancel the alarm
                 alarmManager.cancel(pendingIntent);
-                Log.d("QuickNotif", "✅ Canceled AlarmManager alarm for ID: " + notificationId + " (numeric: " + numericId + ")");
+                Log.d(TAG, "✅ Canceled AlarmManager alarm for ID: " + notificationId
+                        + " (numeric: " + numericId + ")");
             } catch (Exception e) {
-                Log.e("QuickNotif", "❌ Error canceling AlarmManager alarm: " + e.getMessage(), e);
+                Log.e(TAG, "❌ Error canceling AlarmManager alarm: " + e.getMessage(), e);
             }
         }
 
-        /**
-         * Generate consistent numeric ID from string ID (same algorithm as widget)
-         */
-        private int generateNumericId(String stringId) {
-            int hash = 5381;
-            for (int i = 0; i < stringId.length(); i++) {
-                hash = ((hash << 5) + hash) ^ stringId.charAt(i);
-            }
-            return Math.abs(hash) % 2147483646 + 1;
+        @JavascriptInterface
+        public void refreshWidget() {
+            NotifUtils.refreshAllWidgets(MainActivity.this);
         }
     }
 
-
-
-    @RequiresApi(api = Build.VERSION_CODES.S)
+    /** Prompts the user to grant exact-alarm permission on Android 12+. */
     private void requestExactAlarmPermission() {
-        AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
-
-        if (alarmManager != null && !alarmManager.canScheduleExactAlarms()) {
-            Intent intent = new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
-            startActivity(intent);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (alarmManager != null && !alarmManager.canScheduleExactAlarms()) {
+                Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM);
+                startActivity(intent);
+            }
         }
     }
 }

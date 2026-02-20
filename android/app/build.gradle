@@ -1,4 +1,9 @@
 apply plugin: 'com.android.application'
+apply plugin: 'jacoco'
+
+jacoco {
+    toolVersion = "0.8.12"
+}
 
 android {
     namespace "app.amir.quicknotif"
@@ -17,9 +22,26 @@ android {
         }
     }
     buildTypes {
+        debug {
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
+            all {
+                jacoco {
+                    // Required for Robolectric: include classes without source location
+                    // (dynamically generated classes produced by byte-buddy / ASM)
+                    includeNoLocationClasses = true
+                    // Exclude JDK internals that JaCoCo cannot instrument on Java 21+
+                    excludes = ['jdk.internal.*']
+                }
+            }
         }
     }
 }
@@ -37,9 +59,39 @@ dependencies {
     implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
     implementation project(':capacitor-android')
     testImplementation "junit:junit:$junitVersion"
+    testImplementation "org.robolectric:robolectric:4.12.2"
+    testImplementation "org.mockito:mockito-core:5.14.2"
+    testImplementation "androidx.test:core:1.6.1"
+    testImplementation "androidx.test:rules:1.6.1"
+    testImplementation "androidx.test.ext:junit:1.2.1"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+}
+
+task jacocoTestReport(type: JacocoReport, dependsOn: 'testDebugUnitTest') {
+    group = "Reporting"
+    description = "Generate JaCoCo coverage report for Android unit tests"
+
+    reports {
+        xml.required = true
+        html.required = true
+    }
+
+    def classExcludes = [
+        '**/R.class', '**/R$*.class',
+        '**/BuildConfig.*', '**/Manifest*.*',
+        '**/*Test*.*', 'android/**/*.*',
+        '**/generated/**/*.*'
+    ]
+    classDirectories.setFrom(files([
+        fileTree(
+            dir: "${buildDir}/intermediates/javac/debug/compileDebugJavaWithJavac/classes",
+            excludes: classExcludes
+        )
+    ]))
+    sourceDirectories.setFrom(files(["${project.projectDir}/src/main/java"]))
+    executionData.setFrom(fileTree(dir: project.buildDir, includes: ['**/*.exec', '**/*.ec']))
 }
 
 apply from: 'capacitor.build.gradle'

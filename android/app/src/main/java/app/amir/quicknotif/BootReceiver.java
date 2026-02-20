@@ -3,7 +3,6 @@ package app.amir.quicknotif;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.util.Log;
 
 import org.json.JSONArray;
@@ -15,9 +14,11 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * BootReceiver - Reschedules all active notifications after device reboot
- * Android cancels all scheduled alarms/notifications when the device reboots.
- * This receiver listens for BOOT_COMPLETED and reschedules all future notifications.
+ * BootReceiver — reschedules all active notifications after device reboot.
+ *
+ * Android cancels all AlarmManager alarms on reboot. This receiver listens for
+ * BOOT_COMPLETED and calls NotifUtils.scheduleAlarm() directly for every enabled
+ * future notification, without launching any Activity.
  */
 public class BootReceiver extends BroadcastReceiver {
 
@@ -29,25 +30,25 @@ public class BootReceiver extends BroadcastReceiver {
 
         if (Intent.ACTION_BOOT_COMPLETED.equals(action) ||
                 "android.intent.action.QUICKBOOT_POWERON".equals(action)) {
-
-            Log.d(TAG, "🔄 Device rebooted - Rescheduling notifications");
+            Log.d(TAG, "🔄 Device rebooted - rescheduling notifications");
             rescheduleNotifications(context);
         }
     }
 
     private void rescheduleNotifications(Context context) {
         try {
-            SharedPreferences prefs = context.getSharedPreferences("CapacitorStorage", Context.MODE_PRIVATE);
-            String notificationsJson = prefs.getString("notifications", "[]");
+            String notificationsJson = NotifUtils.readNotificationsJson(context);
 
-            if (notificationsJson == null || notificationsJson.equals("[]")) {
+            if (notificationsJson.equals("[]")) {
                 Log.d(TAG, "📭 No notifications to reschedule");
                 return;
             }
 
             JSONArray array = new JSONArray(notificationsJson);
-            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
-            isoFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+
+            // ISO date fallback parser for scheduledAt stored as a string
+            SimpleDateFormat isoFormat = new SimpleDateFormat(NotifUtils.ISO_DATE_FORMAT, Locale.US);
+            isoFormat.setTimeZone(TimeZone.getTimeZone(NotifUtils.UTC_TIMEZONE));
 
             long currentTime = System.currentTimeMillis();
             int rescheduled = 0;
@@ -56,15 +57,16 @@ public class BootReceiver extends BroadcastReceiver {
             for (int i = 0; i < array.length(); i++) {
                 try {
                     JSONObject obj = array.getJSONObject(i);
-                    boolean enabled = obj.optBoolean("enabled", false);
-                    String id = obj.optString("id", "");
+                    boolean enabled = obj.optBoolean(NotifUtils.JSON_KEY_ENABLED, false);
+                    String id = obj.optString(NotifUtils.JSON_KEY_ID, "");
 
+                    // scheduledAt is normally stored as a long. fall back to ISO string
                     long scheduledAt = 0L;
                     try {
-                        scheduledAt = obj.getLong("scheduledAt");
+                        scheduledAt = obj.getLong(NotifUtils.JSON_KEY_SCHEDULED_AT);
                     } catch (Exception e) {
-                        String s = obj.optString("scheduledAt", null);
-                        if (s != null && !s.isEmpty()) {
+                        String s = obj.optString(NotifUtils.JSON_KEY_SCHEDULED_AT, "");
+                        if (!s.isEmpty()) {
                             try {
                                 Date parsed = isoFormat.parse(s);
                                 if (parsed != null) scheduledAt = parsed.getTime();
@@ -72,32 +74,17 @@ public class BootReceiver extends BroadcastReceiver {
                         }
                     }
 
-                    // Only reschedule enabled future notifications
                     if (enabled && scheduledAt > currentTime) {
-                        String name = obj.optString("name", "");
-
-                        // Use Intent to launch MainActivity which will handle rescheduling
-                        // This is more reliable than trying to use Capacitor plugins directly
-                        Intent rescheduleIntent = new Intent(context, MainActivity.class);
-                        rescheduleIntent.setAction("RESCHEDULE_NOTIFICATION");
-                        rescheduleIntent.putExtra("notificationId", id);
-                        rescheduleIntent.putExtra("notificationName", name);
-                        rescheduleIntent.putExtra("scheduledAt", scheduledAt);
-                        rescheduleIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-                        context.startActivity(rescheduleIntent);
-
+                        String name = obj.optString(NotifUtils.JSON_KEY_NAME, "");
+                        NotifUtils.scheduleAlarm(context, id, name, scheduledAt);
                         rescheduled++;
-
-                        Log.d(TAG, String.format("✅ Queued reschedule: %s (ID: %s, at: %s)",
-                                name, id, new Date(scheduledAt).toString()));
+                        Log.d(TAG, String.format("✅ Rescheduled: %s (ID: %s)", name, id));
                     } else {
                         skipped++;
-
                         if (!enabled) {
-                            Log.d(TAG, String.format("⏭️ Skipped disabled: %s", obj.optString("name", "")));
+                            Log.d(TAG, "⏭️ Skipped disabled: " + obj.optString(NotifUtils.JSON_KEY_NAME, ""));
                         } else {
-                            Log.d(TAG, String.format("⏭️ Skipped expired: %s", obj.optString("name", "")));
+                            Log.d(TAG, "⏭️ Skipped expired: " + obj.optString(NotifUtils.JSON_KEY_NAME, ""));
                         }
                     }
 

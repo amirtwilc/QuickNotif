@@ -25,29 +25,39 @@ npm run preview      # Preview production build
 
 **Testing:**
 ```bash
-npm test                 # Run all tests once (required before every APK build)
+npm test                 # Run all React/TypeScript tests (required before every APK build)
 npm run test:watch       # Run tests in watch mode during development
 npm run test:coverage    # Run tests with coverage report
+
+# Android unit tests (Robolectric) — required before every APK build
+# IMPORTANT: Must use JDK 21 — system default Java 25 is incompatible with Gradle 8.11.1
+export JAVA_HOME="C:/Program Files/Java/jdk-21"
+cd android && ./gradlew :app:testDebugUnitTest
 ```
 
 **Android Development:**
 ```bash
 # CRITICAL: After making ANY changes to the project, run this sequence:
-npm test                         # Run tests first — fix any failures before proceeding
-npm run build                    # Build web assets
-npx cap sync android            # Sync to Android project
-cd android && ./gradlew assembleDebug  # Create APK
-cp android/app/build/outputs/apk/debug/app-debug.apk QuickNotif-latest.apk  # Copy APK to root
+npm test                                                    # 1. React/TS tests — fix failures before proceeding
+export JAVA_HOME="C:/Program Files/Java/jdk-21"            # 2. Set JDK 21 (required for Gradle)
+cd android && ./gradlew :app:testDebugUnitTest && cd ..    # 3. Android unit tests — fix failures before proceeding
+npm run build                                               # 4. Build web assets
+npx cap sync android                                        # 5. Sync to Android project
+cd android && ./gradlew assembleDebug                       # 6. Create APK
+cp android/app/build/outputs/apk/debug/app-debug.apk QuickNotif-latest.apk  # 7. Copy APK to root
 ```
 
-**Important:** ALWAYS run the full build sequence (`npm test` → `npm run build` → `npx cap sync android` → `gradlew assembleDebug` → `cp APK to root`) after making changes. This ensures:
-1. Tests pass — no regressions in React/TypeScript logic
-2. Web assets are built with latest code
-3. Changes are synced to the Android project
-4. A new APK is generated for testing
-5. The latest APK is copied to the root folder as `QuickNotif-latest.apk` for easy access
+**Important:** ALWAYS run the full build sequence after making changes. This ensures:
+1. React/TypeScript tests pass — no regressions in frontend logic
+2. Android Java tests pass — no regressions in widget/alarm/receiver logic
+3. Web assets are built with latest code
+4. Changes are synced to the Android project
+5. A new APK is generated for testing
+6. The latest APK is copied to the root folder as `QuickNotif-latest.apk` for easy access
 
-**CRITICAL:** Never build the APK if `npm test` fails. Fix failing tests first.
+**CRITICAL:** Never build the APK if either `npm test` or `gradlew testDebugUnitTest` fails. Fix failing tests first.
+
+**JDK Note:** The system default Java is version 25, which Gradle 8.11.1 does not support. Always set `JAVA_HOME="C:/Program Files/Java/jdk-21"` before running any `./gradlew` command.
 
 ## Architecture
 
@@ -91,7 +101,7 @@ Multi-step permission setup (see `Index.tsx:70-119`):
 - `BootReceiver.java`: Restores alarms after device reboot
 
 **Widget Actions:**
-- Refresh: Updates widget display (polls every 5 minutes via AlarmManager)
+- Refresh: Updates widget display (polls every minute via AlarmManager)
 - Delete: Removes notification from storage
 - Reactivate: Re-schedules notification using original time/interval
 - Reschedule: Opens dialog to change notification time
@@ -158,6 +168,13 @@ Used by `NotificationService.ts` to guide users through permission setup.
 - **Widget testing:** Add widget to home screen, verify CRUD operations work
 - **Permission testing:** Fresh install to test permission flow
 - **Reboot testing:** Schedule notification, reboot device, verify it reschedules via BootReceiver
+
+**Android unit tests (Robolectric):**
+- Test files: `android/app/src/test/java/app/amir/quicknotif/`
+- Run with: `export JAVA_HOME="C:/Program Files/Java/jdk-21" && cd android && ./gradlew :app:testDebugUnitTest`
+- Covers: `NotifUtils`, `BaseNotificationActivity`, `BootReceiver`, `QuickNotifWidgetProvider`, `QuickNotifWidgetService`, `AddNotificationActivity`, `RescheduleActivity`, `NotificationReceiver`
+- 112 tests covering ID hashing, alarm scheduling, SharedPreferences CRUD, widget actions, and notification display
+- **Coverage:** `enableUnitTestCoverage = true` (AGP) + Robolectric produces a 0% HTML report due to AGP offline instrumentation being incompatible with Robolectric's classloader. The `.exec` data file is real but the report is unusable. To get accurate coverage, the `jacoco` Gradle plugin with online instrumentation is needed instead.
 
 ## Important Notes
 

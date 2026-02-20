@@ -16,6 +16,7 @@ declare global {
       isAlarmScheduled(notificationId: number): boolean;
       checkAllAlarms(notificationIdsJson: string): string;
       cancelAlarmManagerNotification(notificationId: string): void;
+      refreshWidget(): void;
     };
   }
 }
@@ -503,6 +504,7 @@ export class NotificationService {
     if (Capacitor.isNativePlatform()) {
       await Preferences.set({ key: 'notifications', value: notificationsJson });
       await Preferences.set({ key: 'savedNames', value: savedNamesJson });
+      window.Android?.refreshWidget();
     } else {
       localStorage.setItem('notifications', notificationsJson);
       localStorage.setItem('savedNames', savedNamesJson);

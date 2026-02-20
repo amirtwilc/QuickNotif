@@ -12,6 +12,7 @@ Object.defineProperty(window, 'Android', {
     isAlarmScheduled: vi.fn(() => false),
     checkAllAlarms: vi.fn(() => '{}'),
     cancelAlarmManagerNotification: vi.fn(),
+    refreshWidget: vi.fn(),
   },
 });
 

@@ -12,8 +12,9 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 /**
- * Receives alarm broadcasts and shows notifications
- * Used by widget reactivate/reschedule actions
+ * Receives AlarmManager broadcasts and displays the scheduled notification.
+ * This is the delivery endpoint for every notification in the app — whether
+ * scheduled from the React UI, the widget, or restored after reboot.
  */
 public class NotificationReceiver extends BroadcastReceiver {
     private static final String TAG = "NotificationReceiver";
@@ -26,14 +27,12 @@ public class NotificationReceiver extends BroadcastReceiver {
         Log.d(TAG, "🔔 Received notification broadcast: " + notificationName);
 
         if (notificationName == null || notificationName.isEmpty()) {
-            notificationName = "Quick Notif";
+            notificationName = NotifUtils.CHANNEL_NAME;
         }
 
-        // Show the notification
         showNotification(context, notificationId, notificationName);
-
-        // Write to log
-        writeToLog(context, "FIRE", notificationId, notificationName);
+        NotifUtils.writeToLog("FIRE", notificationId, notificationName, 0L);
+        NotifUtils.refreshAllWidgets(context);
     }
 
     private void showNotification(Context context, String id, String name) {
@@ -45,21 +44,21 @@ public class NotificationReceiver extends BroadcastReceiver {
             return;
         }
 
-        // Create notification channel for Android O+
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        // Create notification channel for Android O+ only if it doesn't already exist
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && notificationManager.getNotificationChannel(NotifUtils.CHANNEL_ID) == null) {
             NotificationChannel channel = new NotificationChannel(
-                    "timer-alerts",
-                    "Quick Notif",
+                    NotifUtils.CHANNEL_ID,
+                    NotifUtils.CHANNEL_NAME,
                     NotificationManager.IMPORTANCE_HIGH
             );
             channel.setDescription("Timer and notification alerts");
             channel.enableVibration(true);
             channel.enableLights(true);
-            channel.setLightColor(0xFF6366F1); // Purple
+            channel.setLightColor(NotifUtils.ACCENT_COLOR);
             notificationManager.createNotificationChannel(channel);
         }
 
-        // Intent to open app when notification is tapped
         Intent appIntent = new Intent(context, MainActivity.class);
         appIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
@@ -70,60 +69,22 @@ public class NotificationReceiver extends BroadcastReceiver {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
         );
 
-        // Build notification
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "timer-alerts")
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, NotifUtils.CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_notification)
-                .setColor(0xFF6366F1)
-                .setContentTitle("Quick Notif")
+                .setColor(NotifUtils.ACCENT_COLOR)
+                .setContentTitle(NotifUtils.CHANNEL_NAME)
                 .setContentText(name)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(name))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setAutoCancel(true)
                 .setVibrate(new long[]{0, 250, 250, 250})
-                .setLights(0xFF6366F1, 1000, 1000)
+                .setLights(NotifUtils.ACCENT_COLOR, 1000, 1000)
                 .setContentIntent(pendingIntent);
 
-        // Show notification
-        int numericId = generateNumericId(id);
+        int numericId = NotifUtils.generateNumericId(id);
         notificationManager.notify(numericId, builder.build());
 
         Log.d(TAG, "✅ Notification shown: " + name);
-    }
-
-    private int generateNumericId(String stringId) {
-        int hash = 5381;
-        for (int i = 0; i < stringId.length(); i++) {
-            hash = ((hash << 5) + hash) ^ stringId.charAt(i);
-        }
-        return Math.abs(hash) % 2147483646 + 1;
-    }
-
-    private void writeToLog(Context context, String type, String id, String name) {
-        try {
-            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat(
-                    "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US);
-            String timestamp = sdf.format(new java.util.Date());
-
-            String logLine = String.format("[%s] [%s] [ID:%s...] [%s] 🔔 Notification fired\n",
-                    timestamp,
-                    type,
-                    id != null ? id.substring(0, Math.min(12, id.length())) : "unknown",
-                    name
-            );
-
-            // Write to log file
-            java.io.File documentsDir = android.os.Environment.getExternalStoragePublicDirectory(
-                    android.os.Environment.DIRECTORY_DOCUMENTS);
-            java.io.File logFile = new java.io.File(documentsDir, "notification_debug.log");
-
-            java.io.FileWriter writer = new java.io.FileWriter(logFile, true);
-            writer.write(logLine);
-            writer.close();
-
-            Log.d(TAG, "✅ Wrote to log file");
-        } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to write to log", e);
-        }
     }
 }
