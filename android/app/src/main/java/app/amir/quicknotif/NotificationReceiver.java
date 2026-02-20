@@ -12,8 +12,9 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 /**
- * Receives alarm broadcasts and shows notifications.
- * Used by widget reactivate/reschedule actions and BootReceiver.
+ * Receives AlarmManager broadcasts and displays the scheduled notification.
+ * This is the delivery endpoint for every notification in the app — whether
+ * scheduled from the React UI, the widget, or restored after reboot.
  */
 public class NotificationReceiver extends BroadcastReceiver {
     private static final String TAG = "NotificationReceiver";
@@ -30,7 +31,8 @@ public class NotificationReceiver extends BroadcastReceiver {
         }
 
         showNotification(context, notificationId, notificationName);
-        NotifUtils.writeToLog(context, "FIRE", notificationId, notificationName, 0L);
+        NotifUtils.writeToLog("FIRE", notificationId, notificationName, 0L);
+        NotifUtils.refreshAllWidgets(context);
     }
 
     private void showNotification(Context context, String id, String name) {

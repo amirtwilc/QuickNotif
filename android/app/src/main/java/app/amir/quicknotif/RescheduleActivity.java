@@ -36,7 +36,7 @@ public class RescheduleActivity extends BaseNotificationActivity {
         titleText.setText("Reschedule: " + (notificationName != null && !notificationName.isEmpty()
                 ? notificationName : "Notification"));
 
-        if ("absolute".equals(notificationType)) {
+        if (NotifUtils.TYPE_ABSOLUTE.equals(notificationType)) {
             ((RadioButton) findViewById(R.id.type_absolute)).setChecked(true);
         } else {
             ((RadioButton) findViewById(R.id.type_relative)).setChecked(true);
@@ -53,11 +53,11 @@ public class RescheduleActivity extends BaseNotificationActivity {
             int checkedId = typeGroup.getCheckedRadioButtonId();
 
             if (checkedId == R.id.type_absolute) {
-                type = "absolute";
+                type = NotifUtils.TYPE_ABSOLUTE;
                 time = String.format(Locale.getDefault(), "%02d:%02d", selectedHour, selectedMinute);
                 scheduledAt = calculateAbsoluteTime(selectedHour, selectedMinute);
             } else {
-                type = "relative";
+                type = NotifUtils.TYPE_RELATIVE;
 
                 String hoursStr   = hoursInput.getText().toString().trim();
                 String minutesStr = minutesInput.getText().toString().trim();
@@ -76,7 +76,7 @@ public class RescheduleActivity extends BaseNotificationActivity {
 
             updateNotification(notificationId, time, type, scheduledAt);
             NotifUtils.scheduleAlarm(this, notificationId, notificationName, scheduledAt);
-            NotifUtils.writeToLog(this, "RESCHEDULE", notificationId, notificationName, scheduledAt);
+            NotifUtils.writeToLog("RESCHEDULE", notificationId, notificationName, scheduledAt);
             NotifUtils.refreshAllWidgets(this);
 
             Toast.makeText(this, "Notification rescheduled", Toast.LENGTH_SHORT).show();
@@ -95,14 +95,14 @@ public class RescheduleActivity extends BaseNotificationActivity {
 
             for (int i = 0; i < array.length(); i++) {
                 JSONObject obj = array.getJSONObject(i);
-                if (id.equals(obj.optString("id", ""))) {
-                    obj.put("time", time);
-                    obj.put("type", type);
-                    obj.put("scheduledAt", scheduledAt);
-                    obj.put("updatedAt", System.currentTimeMillis());
-                    obj.put("enabled", true);
+                if (id.equals(obj.optString(NotifUtils.JSON_KEY_ID, ""))) {
+                    obj.put(NotifUtils.JSON_KEY_TIME, time);
+                    obj.put(NotifUtils.JSON_KEY_TYPE, type);
+                    obj.put(NotifUtils.JSON_KEY_SCHEDULED_AT, scheduledAt);
+                    obj.put(NotifUtils.JSON_KEY_UPDATED_AT, System.currentTimeMillis());
+                    obj.put(NotifUtils.JSON_KEY_ENABLED, true);
 
-                    if ("relative".equals(type)) {
+                    if (NotifUtils.TYPE_RELATIVE.equals(type)) {
                         // Parse the time string to derive the interval in ms
                         String[] parts = time.toLowerCase().split(" ");
                         long totalMinutes = 0;
@@ -117,9 +117,9 @@ public class RescheduleActivity extends BaseNotificationActivity {
                                 }
                             } catch (Exception ignored) {}
                         }
-                        obj.put("interval", totalMinutes * 60 * 1000);
+                        obj.put(NotifUtils.JSON_KEY_INTERVAL, totalMinutes * 60 * 1000);
                     } else {
-                        obj.remove("interval");
+                        obj.remove(NotifUtils.JSON_KEY_INTERVAL);
                     }
 
                     break;

@@ -49,11 +49,11 @@ public class AddNotificationActivity extends BaseNotificationActivity {
             int checkedId = typeGroup.getCheckedRadioButtonId();
 
             if (checkedId == R.id.type_absolute) {
-                type = "absolute";
+                type = NotifUtils.TYPE_ABSOLUTE;
                 time = String.format(Locale.getDefault(), "%02d:%02d", selectedHour, selectedMinute);
                 scheduledAt = calculateAbsoluteTime(selectedHour, selectedMinute);
             } else {
-                type = "relative";
+                type = NotifUtils.TYPE_RELATIVE;
 
                 String hoursStr   = hoursInput.getText().toString().trim();
                 String minutesStr = minutesInput.getText().toString().trim();
@@ -74,7 +74,7 @@ public class AddNotificationActivity extends BaseNotificationActivity {
             String notificationId = generateNotificationId();
             createNotification(notificationId, name, time, type, scheduledAt, interval);
             NotifUtils.scheduleAlarm(this, notificationId, name, scheduledAt);
-            NotifUtils.writeToLog(this, "CREATE", notificationId, name, scheduledAt);
+            NotifUtils.writeToLog("CREATE", notificationId, name, scheduledAt);
             NotifUtils.refreshAllWidgets(this);
 
             Toast.makeText(this, "Notification created", Toast.LENGTH_SHORT).show();
@@ -93,16 +93,16 @@ public class AddNotificationActivity extends BaseNotificationActivity {
             JSONArray array = new JSONArray(notificationsJson);
 
             JSONObject newNotification = new JSONObject();
-            newNotification.put("id", id);
-            newNotification.put("name", name);
-            newNotification.put("time", time);
-            newNotification.put("type", type);
-            newNotification.put("enabled", true);
-            newNotification.put("scheduledAt", scheduledAt);
-            newNotification.put("updatedAt", System.currentTimeMillis());
+            newNotification.put(NotifUtils.JSON_KEY_ID, id);
+            newNotification.put(NotifUtils.JSON_KEY_NAME, name);
+            newNotification.put(NotifUtils.JSON_KEY_TIME, time);
+            newNotification.put(NotifUtils.JSON_KEY_TYPE, type);
+            newNotification.put(NotifUtils.JSON_KEY_ENABLED, true);
+            newNotification.put(NotifUtils.JSON_KEY_SCHEDULED_AT, scheduledAt);
+            newNotification.put(NotifUtils.JSON_KEY_UPDATED_AT, System.currentTimeMillis());
 
-            if ("relative".equals(type) && interval > 0) {
-                newNotification.put("interval", interval);
+            if (NotifUtils.TYPE_RELATIVE.equals(type) && interval > 0) {
+                newNotification.put(NotifUtils.JSON_KEY_INTERVAL, interval);
             }
 
             array.put(newNotification);

@@ -121,6 +121,15 @@ public class NotificationReceiverTest {
     }
 
     @Test
+    public void onReceive_triggersWidgetRefresh_withoutCrashing() {
+        // With no widget instances registered, refreshAllWidgets() is a no-op.
+        // Verifies onReceive() completes successfully with the widget refresh call in place.
+        receiver.onReceive(context, makeIntent("notification_9_9", "Widget refresh test"));
+
+        assertEquals(1, shadowNotificationManager.getAllNotifications().size());
+    }
+
+    @Test
     public void showNotification_notificationHasVibration() {
         receiver.onReceive(context, makeIntent("notification_8_8", "Vibration test"));
 

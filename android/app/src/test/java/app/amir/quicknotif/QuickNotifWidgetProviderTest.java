@@ -356,13 +356,9 @@ public class QuickNotifWidgetProviderTest {
 
     @Test
     public void calculateNewScheduleTime_absolute_invalidFormat_fallsBack() throws Exception {
-        long before = System.currentTimeMillis();
         long result = callCalculateNewScheduleTime("absolute", "not-a-time", 0L);
-        long after = System.currentTimeMillis();
-
-        long expectedFallback = 3_600_000L;
-        assertTrue(result >= before + expectedFallback);
-        assertTrue(result <= after + expectedFallback + 100);
+        // Invalid format cannot be parsed - method contract returns -1 to signal failure
+        assertEquals(-1L, result);
     }
 
     // ─── Routing actions ──────────────────────────────────────────────────────

@@ -226,6 +226,11 @@ public class MainActivity extends BridgeActivity {
                 Log.e(TAG, "❌ Error canceling AlarmManager alarm: " + e.getMessage(), e);
             }
         }
+
+        @JavascriptInterface
+        public void refreshWidget() {
+            NotifUtils.refreshAllWidgets(MainActivity.this);
+        }
     }
 
     /** Prompts the user to grant exact-alarm permission on Android 12+. */

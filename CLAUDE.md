@@ -101,7 +101,7 @@ Multi-step permission setup (see `Index.tsx:70-119`):
 - `BootReceiver.java`: Restores alarms after device reboot
 
 **Widget Actions:**
-- Refresh: Updates widget display (polls every 5 minutes via AlarmManager)
+- Refresh: Updates widget display (polls every minute via AlarmManager)
 - Delete: Removes notification from storage
 - Reactivate: Re-schedules notification using original time/interval
 - Reschedule: Opens dialog to change notification time

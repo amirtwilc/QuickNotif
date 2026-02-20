@@ -7,7 +7,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.Build;
 import android.os.Environment;
 import android.util.Log;
 
@@ -33,12 +32,33 @@ public final class NotifUtils {
     public static final String CHANNEL_NAME = "Quick Notif";
     public static final int    ACCENT_COLOR = 0xFF6366F1;
 
+    // JSON field names (shared with TypeScript — must stay in sync)
+    public static final String JSON_KEY_ID           = "id";
+    public static final String JSON_KEY_NAME         = "name";
+    public static final String JSON_KEY_ENABLED      = "enabled";
+    public static final String JSON_KEY_SCHEDULED_AT = "scheduledAt";
+    public static final String JSON_KEY_UPDATED_AT   = "updatedAt";
+    public static final String JSON_KEY_TYPE         = "type";
+    public static final String JSON_KEY_TIME         = "time";
+    public static final String JSON_KEY_INTERVAL     = "interval";
+
+    // Notification type values (must match TypeScript string literals)
+    public static final String TYPE_RELATIVE = "relative";
+    public static final String TYPE_ABSOLUTE = "absolute";
+
+    // ISO 8601 format used as a fallback when scheduledAt is stored as a string
+    public static final String ISO_DATE_FORMAT = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'";
+    public static final String UTC_TIMEZONE    = "UTC";
+
+    // Intent extra keys (used across activities, receivers, and widget)
+    public static final String EXTRA_NOTIFICATION_ID   = "notificationId";
+    public static final String EXTRA_NOTIFICATION_NAME = "notificationName";
+    public static final String EXTRA_NOTIFICATION_TYPE = "notificationType";
+
     // Logging
     public static final String LOG_FILE_NAME = "notification_debug.log";
 
     private NotifUtils() {}
-
-    // ─── ID generation ───────────────────────────────────────────────────────
 
     /**
      * DJB2-variant hash: converts a string notification ID to a stable positive int.
@@ -49,10 +69,8 @@ public final class NotifUtils {
         for (int i = 0; i < stringId.length(); i++) {
             hash = ((hash << 5) + hash) ^ stringId.charAt(i);
         }
-        return Math.abs(hash) % 2147483646 + 1;
+        return Math.abs(hash) % (Integer.MAX_VALUE - 1) + 1;
     }
-
-    // ─── SharedPreferences helpers ────────────────────────────────────────────
 
     public static SharedPreferences getPrefs(Context context) {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -66,8 +84,6 @@ public final class NotifUtils {
         getPrefs(context).edit().putString(KEY_NOTIFICATIONS, json).apply();
     }
 
-    // ─── AlarmManager helpers ─────────────────────────────────────────────────
-
     /**
      * Schedule an exact alarm for the given notification.
      * Cancels any existing alarm for the same ID first to prevent duplicates.
@@ -77,8 +93,8 @@ public final class NotifUtils {
             Log.d(TAG, "📅 Scheduling alarm: " + name + " at " + new Date(scheduledAt));
 
             Intent notificationIntent = new Intent(context, NotificationReceiver.class);
-            notificationIntent.putExtra("notificationId", id);
-            notificationIntent.putExtra("notificationName", name);
+            notificationIntent.putExtra(EXTRA_NOTIFICATION_ID, id);
+            notificationIntent.putExtra(EXTRA_NOTIFICATION_NAME, name);
 
             int numericId = generateNumericId(id);
 
@@ -92,19 +108,11 @@ public final class NotifUtils {
             AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (alarmManager != null) {
                 alarmManager.cancel(pendingIntent);
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                            AlarmManager.RTC_WAKEUP,
-                            scheduledAt,
-                            pendingIntent
-                    );
-                } else {
-                    alarmManager.setExact(
-                            AlarmManager.RTC_WAKEUP,
-                            scheduledAt,
-                            pendingIntent
-                    );
-                }
+                alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        scheduledAt,
+                        pendingIntent
+                );
                 Log.d(TAG, "✅ Alarm scheduled in AlarmManager");
             } else {
                 Log.e(TAG, "❌ AlarmManager is null");
@@ -118,8 +126,8 @@ public final class NotifUtils {
     public static void cancelAlarm(Context context, String id) {
         try {
             Intent notificationIntent = new Intent(context, NotificationReceiver.class);
-            notificationIntent.putExtra("notificationId", id);
-            notificationIntent.putExtra("notificationName", "");
+            notificationIntent.putExtra(EXTRA_NOTIFICATION_ID, id);
+            notificationIntent.putExtra(EXTRA_NOTIFICATION_NAME, "");
 
             int numericId = generateNumericId(id);
 
@@ -140,15 +148,12 @@ public final class NotifUtils {
         }
     }
 
-    // ─── Logging ──────────────────────────────────────────────────────────────
-
     /**
      * Append a line to the debug log file in Documents/.
      * Pass scheduledAt=0 when there is no scheduled time to report.
      * Uses try-with-resources so the FileWriter is always closed.
      */
-    public static void writeToLog(Context context, String type, String id,
-                                  String name, long scheduledAt) {
+    public static void writeToLog(String type, String id, String name, long scheduledAt) {
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
             String timestamp = sdf.format(new Date());
@@ -178,8 +183,6 @@ public final class NotifUtils {
             Log.e(TAG, "❌ Failed to write to log", e);
         }
     }
-
-    // ─── Widget refresh ───────────────────────────────────────────────────────
 
     /** Notify all active widget instances to refresh their list view. */
     public static void refreshAllWidgets(Context context) {
