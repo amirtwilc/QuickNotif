@@ -7,16 +7,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Battery, Bell, Smartphone } from "lucide-react";
+import { Bell, Smartphone } from "lucide-react";
 
 interface PermissionsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onContinue: () => void;
-  step: 'notification' | 'battery' | 'autostart' | 'complete';
+  onSkip?: () => void;
+  step: 'notification' | 'autostart' | 'complete';
 }
 
-const PermissionsDialog = ({ open, onOpenChange, onContinue, step }: PermissionsDialogProps) => {
+const PermissionsDialog = ({ open, onOpenChange, onContinue, onSkip, step }: PermissionsDialogProps) => {
   const getStepContent = () => {
     switch (step) {
       case 'notification':
@@ -25,27 +26,6 @@ const PermissionsDialog = ({ open, onOpenChange, onContinue, step }: Permissions
           title: "Enable Notifications",
           description: "Quick Notif needs permission to send you notifications. You'll be prompted to allow this next.",
           buttonText: "Continue"
-        };
-      
-      case 'battery':
-        return {
-          icon: <Battery className="w-12 h-12 text-primary" />,
-          title: "Battery Optimization",
-          description: (
-            <div className="space-y-3 text-left">
-              <p>For notifications to work reliably, please disable battery optimization for this app.</p>
-              <div className="bg-muted p-3 rounded-md">
-                <p className="font-semibold mb-2">When prompted:</p>
-                <ol className="list-decimal list-inside space-y-1 text-sm">
-                  <li>Select "Quick Notif" from the app list</li>
-                  <li>Choose <span className="font-bold">"Don't optimize"</span> or <span className="font-bold">"No restrictions"</span></li>
-                  <li>Tap "Done" or "Allow"</li>
-                </ol>
-              </div>
-              <p className="text-sm text-muted-foreground">After changing the setting, the app will automatically continue.</p>
-            </div>
-          ),
-          buttonText: "Open Battery Settings"
         };
       
       case 'autostart':
@@ -105,7 +85,7 @@ const PermissionsDialog = ({ open, onOpenChange, onContinue, step }: Permissions
             {content.buttonText}
           </Button>
           {content.skipButton && (
-            <Button onClick={onContinue} variant="outline" className="w-full">
+            <Button onClick={onSkip} variant="outline" className="w-full">
               Skip This Step
             </Button>
           )}

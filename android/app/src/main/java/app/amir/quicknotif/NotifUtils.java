@@ -197,8 +197,6 @@ public final class NotifUtils {
             try (FileWriter writer = new FileWriter(logFile, true)) {
                 writer.write(logLine);
             }
-
-            AppLogger.d(TAG,"✅ Wrote to log file");
         } catch (Exception e) {
             AppLogger.e(TAG,"❌ Failed to write to log", e);
         }

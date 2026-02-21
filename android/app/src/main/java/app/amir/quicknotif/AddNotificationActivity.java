@@ -107,7 +107,7 @@ public class AddNotificationActivity extends BaseNotificationActivity {
             array.put(newNotification);
             NotifUtils.saveNotificationsJson(this, array.toString());
 
-            AppLogger.d(TAG,"✅ Created notification in SharedPreferences");
+            AppLogger.d(TAG,"✅ Created notification: id=" + id + ", name=" + name);
         } catch (Exception e) {
             AppLogger.e(TAG,"❌ Failed to create notification in storage", e);
         }
