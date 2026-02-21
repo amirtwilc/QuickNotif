@@ -547,23 +547,51 @@ export class NotificationService {
 
   async verifyNotificationScheduled(id: string): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return true;
-  
+
   try {
     const pending = await LocalNotifications.getPending();
     const numericId = toNumericId(id);
-    
+
     const exists = pending.notifications.some(n => n.id === numericId);
-    
+
     if (!exists) {
       console.warn(`⚠️ Notification ${id} not in pending list!`);
     }
-    
+
     return exists;
   } catch (e) {
     console.error('Failed to verify notification', e);
     return false;
   }
 }
+
+  /**
+   * Re-schedule alarms for notifications that are stored but have no active alarm.
+   * Called automatically by the system check when orphaned notifications are detected.
+   * Uses the original scheduledAt — no recalculation — to restore the exact alarm time.
+   */
+  async rescheduleOrphans(ids: string[]): Promise<void> {
+    if (!Capacitor.isNativePlatform() || ids.length === 0) return;
+
+    for (const id of ids) {
+      const notification = this.notifications.find(n => n.id === id);
+      if (!notification || notification.scheduledAt.getTime() <= Date.now()) continue;
+
+      try {
+        await this.scheduleLocalNotification(id, notification.name, notification.scheduledAt);
+        await notificationLogger.log({
+          timestamp: new Date().toISOString(),
+          type: 'SYSTEM_CHECK',
+          notificationId: id,
+          notificationName: notification.name,
+          scheduledAt: notification.scheduledAt.getTime(),
+          message: `🔧 Auto-rescheduled orphaned alarm for ${notification.scheduledAt.toLocaleString()}`
+        });
+      } catch (e) {
+        await notificationLogger.logError('Failed to reschedule orphan', e, id);
+      }
+    }
+  }
 }
 
 export default NotificationService.getInstance();

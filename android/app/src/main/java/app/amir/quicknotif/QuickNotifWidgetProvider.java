@@ -8,7 +8,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.SystemClock;
-import android.util.Log;
 import android.widget.RemoteViews;
 
 import org.json.JSONArray;
@@ -72,6 +71,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        AppLogger.init(context);
         super.onReceive(context, intent);
         String action = intent.getAction();
 
@@ -124,7 +124,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
 
             NotifUtils.saveNotificationsJson(context, newArray.toString());
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to delete notification: " + notificationId, e);
+            AppLogger.e(TAG,"❌ Failed to delete notification: " + notificationId, e);
         }
     }
 
@@ -168,7 +168,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
 
                     long newScheduledAt = calculateNewScheduleTime(type, time, interval);
                     if (newScheduledAt <= 0) {
-                        Log.e(TAG, "❌ Could not calculate schedule time for: " + name);
+                        AppLogger.e(TAG,"❌ Could not calculate schedule time for: " + name);
                         break;
                     }
 
@@ -178,13 +178,13 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
 
                     NotifUtils.saveNotificationsJson(context, array.toString());
                     NotifUtils.scheduleAlarm(context, id, name, newScheduledAt);
-                    NotifUtils.writeToLog("REACTIVATE", id, name, newScheduledAt);
+                    NotifUtils.writeToLog(context, "REACTIVATE", id, name, newScheduledAt);
 
                     break;
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to reactivate notification: " + notificationId, e);
+            AppLogger.e(TAG,"❌ Failed to reactivate notification: " + notificationId, e);
         }
     }
 
@@ -226,7 +226,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to calculate schedule time", e);
+            AppLogger.e(TAG,"❌ Failed to calculate schedule time", e);
         }
 
         return -1L;

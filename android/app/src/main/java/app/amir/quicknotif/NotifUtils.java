@@ -7,14 +7,12 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.Environment;
-import android.util.Log;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * Shared constants and utility methods used across widget, receiver, and activity classes.
@@ -76,6 +74,28 @@ public final class NotifUtils {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 
+    /**
+     * Parse the {@code scheduledAt} field from a notification JSONObject.
+     * Tries to read it as a long (milliseconds since epoch); falls back to an ISO 8601 string.
+     * Returns {@code 0} if the field is absent or cannot be parsed.
+     */
+    public static long parseScheduledAt(org.json.JSONObject obj) {
+        try {
+            return obj.getLong(JSON_KEY_SCHEDULED_AT);
+        } catch (Exception e) {
+            String s = obj.optString(JSON_KEY_SCHEDULED_AT, "");
+            if (!s.isEmpty()) {
+                try {
+                    SimpleDateFormat fmt = new SimpleDateFormat(ISO_DATE_FORMAT, Locale.US);
+                    fmt.setTimeZone(TimeZone.getTimeZone(UTC_TIMEZONE));
+                    Date parsed = fmt.parse(s);
+                    if (parsed != null) return parsed.getTime();
+                } catch (Exception ignored) {}
+            }
+        }
+        return 0L;
+    }
+
     public static String readNotificationsJson(Context context) {
         return getPrefs(context).getString(KEY_NOTIFICATIONS, "[]");
     }
@@ -90,7 +110,7 @@ public final class NotifUtils {
      */
     public static void scheduleAlarm(Context context, String id, String name, long scheduledAt) {
         try {
-            Log.d(TAG, "📅 Scheduling alarm: " + name + " at " + new Date(scheduledAt));
+            AppLogger.d(TAG,"📅 Scheduling alarm: " + name + " at " + new Date(scheduledAt));
 
             Intent notificationIntent = new Intent(context, NotificationReceiver.class);
             notificationIntent.putExtra(EXTRA_NOTIFICATION_ID, id);
@@ -113,12 +133,12 @@ public final class NotifUtils {
                         scheduledAt,
                         pendingIntent
                 );
-                Log.d(TAG, "✅ Alarm scheduled in AlarmManager");
+                AppLogger.d(TAG,"✅ Alarm scheduled in AlarmManager");
             } else {
-                Log.e(TAG, "❌ AlarmManager is null");
+                AppLogger.e(TAG,"❌ AlarmManager is null");
             }
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to schedule alarm", e);
+            AppLogger.e(TAG,"❌ Failed to schedule alarm", e);
         }
     }
 
@@ -141,10 +161,10 @@ public final class NotifUtils {
             AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (alarmManager != null) {
                 alarmManager.cancel(pendingIntent);
-                Log.d(TAG, "✅ Alarm canceled for ID: " + id);
+                AppLogger.d(TAG,"✅ Alarm canceled for ID: " + id);
             }
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to cancel alarm", e);
+            AppLogger.e(TAG,"❌ Failed to cancel alarm", e);
         }
     }
 
@@ -153,7 +173,7 @@ public final class NotifUtils {
      * Pass scheduledAt=0 when there is no scheduled time to report.
      * Uses try-with-resources so the FileWriter is always closed.
      */
-    public static void writeToLog(String type, String id, String name, long scheduledAt) {
+    public static void writeToLog(Context context, String type, String id, String name, long scheduledAt) {
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
             String timestamp = sdf.format(new Date());
@@ -170,17 +190,17 @@ public final class NotifUtils {
                     scheduledStr
             );
 
-            File documentsDir = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOCUMENTS);
-            File logFile = new File(documentsDir, LOG_FILE_NAME);
+            File dir = context.getExternalFilesDir(null);
+            if (dir == null) return;
+            File logFile = new File(dir, LOG_FILE_NAME);
 
             try (FileWriter writer = new FileWriter(logFile, true)) {
                 writer.write(logLine);
             }
 
-            Log.d(TAG, "✅ Wrote to log file");
+            AppLogger.d(TAG,"✅ Wrote to log file");
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to write to log", e);
+            AppLogger.e(TAG,"❌ Failed to write to log", e);
         }
     }
 

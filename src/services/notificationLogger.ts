@@ -128,7 +128,7 @@ class NotificationLogger {
       try {
         const result = await Filesystem.readFile({
           path: this.LOG_FILE,
-          directory: Directory.Documents,
+          directory: Directory.External,
           encoding: Encoding.UTF8
         });
         existingContent = result.data as string;
@@ -149,7 +149,7 @@ class NotificationLogger {
       await Filesystem.writeFile({
         path: this.LOG_FILE,
         data: existingContent + line,
-        directory: Directory.Documents,
+        directory: Directory.External,
         encoding: Encoding.UTF8,
         recursive: true
       });
@@ -399,9 +399,10 @@ class NotificationLogger {
         allScheduledIds  // Now includes both plugin and AlarmManager
       );
 
-      // Warn about REAL orphaned notifications
+      // Warn about REAL orphaned notifications and auto-reschedule them
       if (orphaned.length > 0) {
-        console.error(`❌ Found ${orphaned.length} ORPHANED notifications - these will NOT fire!`);
+        console.error(`❌ Found ${orphaned.length} ORPHANED notifications — auto-rescheduling`);
+        await notificationService.rescheduleOrphans(orphaned);
       }
 
     } catch (e) {
@@ -418,7 +419,7 @@ class NotificationLogger {
     try {
       const result = await Filesystem.readFile({
         path: this.LOG_FILE,
-        directory: Directory.Documents,
+        directory: Directory.External,
         encoding: Encoding.UTF8
       });
       return result.data as string;
@@ -453,7 +454,7 @@ class NotificationLogger {
       await Filesystem.writeFile({
         path: this.LOG_FILE,
         data: `[${new Date().toISOString()}] [SYSTEM_CHECK] 🗑️ Log cleared\n`,
-        directory: Directory.Documents,
+        directory: Directory.External,
         encoding: Encoding.UTF8,
         recursive: true
       });

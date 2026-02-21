@@ -68,7 +68,25 @@
       "Bash(cmd //c \"dir D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\src\\\\test\\\\java\\\\app\\\\amir\\\\quicknotif\")",
       "Bash(cmd //c \"type D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\src\\\\test\\\\java\\\\app\\\\amir\\\\quicknotif\\\\QuickNotifWidgetProviderTest.java\")",
       "Bash(cmd //c \"copy D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk\")",
-      "Bash(cmd //c \"dir D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk\")"
+      "Bash(cmd //c \"dir D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk\")",
+      "Bash(copy \"D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk\" \"D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk\")",
+      "Bash(cmd //c \"dir D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\ 2>&1\")",
+      "Bash(cmd //c \"copy D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk && dir D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk\")",
+      "Bash(Select-String -Pattern \"AppLogger|Rescheduled|80:|81:|82:|83:|84:|85:|86:|87:|88:|89:|90:\")",
+      "Bash(/tmp/read_file.ps1:*)",
+      "Bash(/tmp/run_tests.ps1:*)",
+      "Bash(/tmp/check_file.ps1:*)",
+      "Bash(/tmp/rewrite_nobom.ps1:*)",
+      "Bash(/tmp/run_build.ps1:*)",
+      "Bash(/tmp/run_build2.ps1:*)",
+      "Bash(/tmp/run_capsync.ps1:*)",
+      "Bash(/tmp/run_assemble.ps1:*)",
+      "Bash(/tmp/copy_apk.ps1:*)",
+      "Bash(/d/Projects/QuickNotif/android/gradlew.bat:*)",
+      "Bash(cmd.exe /c \"copy D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk\")",
+      "Bash(cmd.exe /c \"copy D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk && echo APK copied\")",
+      "Bash(cmd.exe /c copy:*)",
+      "Bash(powershell.exe -Command \"Copy-Item ''D:\\\\Projects\\\\QuickNotif\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug\\\\app-debug.apk'' ''D:\\\\Projects\\\\QuickNotif\\\\QuickNotif-latest.apk''; Write-Output ''APK copied''\")"
     ]
   },
   "hooks": {
