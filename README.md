@@ -2,7 +2,7 @@
 
 An Android notification scheduler with a home screen widget. Schedule notifications at a specific time of day or after a set duration, and manage them directly from the widget without opening the app.
 
-![Quick Notif home screen](docs/App-Home-Screen.png)
+<img src="docs/App-Home-Screen.png" alt="Quick Notif home screen" width="320"/>
 
 ## Prerequisites
 
