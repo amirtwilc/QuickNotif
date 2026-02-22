@@ -154,6 +154,9 @@ public abstract class BaseNotificationActivity extends Activity {
 
     /** Returns the duration in milliseconds for the given hours + minutes. */
     protected long calculateRelativeMs(int hours, int minutes) {
+        if (hours < 0 || minutes < 0 || (hours == 0 && minutes == 0)) {
+            throw new IllegalArgumentException("Duration must be at least 1 minute (got " + hours + "h " + minutes + "m)");
+        }
         return (hours * 3600L + minutes * 60L) * 1000L;
     }
 }

@@ -2,7 +2,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { toNumericId } from '@/utils/notificationUtils';
-import type { NotificationItem } from './notificationService';
+import type { NotificationItem, NotificationService } from './notificationService';
 
 export interface LogEntry {
   timestamp: string;
@@ -22,6 +22,12 @@ class NotificationLogger {
   private DEBUG_MODE = true;
   private LOG_FILE = 'notification_debug.log';
   private MAX_LOG_SIZE = 10000; // Maximum lines before rotation
+  private service: NotificationService | null = null;
+
+  /** Called by NotificationService.getInstance() to break the circular import. */
+  setService(service: NotificationService): void {
+    this.service = service;
+  }
 
   private constructor() {
     if (this.DEBUG_MODE && Capacitor.isNativePlatform()) {
@@ -225,45 +231,33 @@ class NotificationLogger {
       let allAppIdsWithNames: string[] = [];
       let allAndroidIdsWithNames: string[] = [];
 
-      try {
-          const { default: notificationService } = await import('./notificationService');
-          const allNotifications = notificationService.getNotifications();
+      const allNotifications = this.service ? this.service.getNotifications() : [];
 
-          // Format orphaned notifications
-          orphanedDetails = orphaned.map(id => {
-              const notif = allNotifications.find((n: NotificationItem) => n.id === id);
-              return notif ? `${notif.name || 'Unnamed'} (${id})` : id;
-          });
+      // Format orphaned notifications
+      orphanedDetails = orphaned.map(id => {
+          const notif = allNotifications.find((n: NotificationItem) => n.id === id);
+          return notif ? `${notif.name || 'Unnamed'} (${id})` : id;
+      });
 
-          // Format missing notifications (numeric IDs)
-          missingDetails = missing.map(numericId => {
-              // Find notification by converting string IDs to numeric and matching
-              const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
-              return notif ? `${notif.name || 'Unnamed'} (${numericId})` : `Unknown (${numericId})`;
-          });
+      // Format missing notifications (numeric IDs)
+      missingDetails = missing.map(numericId => {
+          const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
+          return notif ? `${notif.name || 'Unnamed'} (${numericId})` : `Unknown (${numericId})`;
+      });
 
-          // Format allAppIds with names
-          allAppIdsWithNames = allAppIds.map(id => {
-              const notif = allNotifications.find((n: NotificationItem) => n.id === id);
-              const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
-              return `${id} (${name})`;
-          });
+      // Format allAppIds with names
+      allAppIdsWithNames = allAppIds.map(id => {
+          const notif = allNotifications.find((n: NotificationItem) => n.id === id);
+          const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
+          return `${id} (${name})`;
+      });
 
-          // Format allAndroidIds with names
-          allAndroidIdsWithNames = allAndroidIds.map(numericId => {
-              const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
-              const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
-              return `${numericId} (${name})`;
-          });
-
-      } catch (e) {
-          // Fallback: just use IDs if import fails
-          orphanedDetails = orphaned.map(id => id);
-          missingDetails = missing.map(id => `${id}`);
-          allAppIdsWithNames = allAppIds.map(id => id);
-          allAndroidIdsWithNames = allAndroidIds.map(id => `${id}`);
-          console.error('Failed to get notification names:', e);
-      }
+      // Format allAndroidIds with names
+      allAndroidIdsWithNames = allAndroidIds.map(numericId => {
+          const notif = allNotifications.find((n: NotificationItem) => toNumericId(n.id) === numericId);
+          const name = notif ? (notif.name || 'Unnamed') : 'Unknown';
+          return `${numericId} (${name})`;
+      });
 
     await this.log({
       timestamp: new Date().toISOString(),
@@ -295,16 +289,14 @@ class NotificationLogger {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
-      // Import here to avoid circular dependency
       const { LocalNotifications } = await import('@capacitor/local-notifications');
 
       // Get plugin-scheduled notifications
       const pending = await LocalNotifications.getPending();
       const pluginScheduledIds = pending.notifications.map(n => n.id);
 
-      // Get app's notifications from storage
-      const { default: notificationService } = await import('./notificationService');
-      const appNotifications = notificationService.getNotifications();
+      // Get app's notifications via the stored service reference
+      const appNotifications = this.service ? this.service.getNotifications() : [];
 
       // Collect all app IDs and numeric IDs
       const allAppIds: string[] = [];
@@ -368,7 +360,9 @@ class NotificationLogger {
       // Warn about REAL orphaned notifications and auto-reschedule them
       if (orphaned.length > 0) {
         console.error(`❌ Found ${orphaned.length} ORPHANED notifications — auto-rescheduling`);
-        await notificationService.rescheduleOrphans(orphaned);
+        if (this.service) {
+          await this.service.rescheduleOrphans(orphaned);
+        }
       }
 
     } catch (e) {

@@ -33,7 +33,7 @@
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:background="@drawable/input_background"
-        android:hint="e.g., Take medication, Meeting reminder"
+        android:hint="Coffee break, Meeting reminder..."
         android:inputType="textCapSentences"
         android:textSize="16sp"
         android:padding="12dp"

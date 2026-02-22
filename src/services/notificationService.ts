@@ -17,7 +17,10 @@ declare global {
       checkAllAlarms(notificationIdsJson: string): string;
       cancelAlarmManagerNotification(notificationId: string): void;
       refreshWidget(): void;
+      canScheduleExactAlarms(): boolean;
     };
+    /** Called by MainActivity.onResume() when exact alarm permission is missing. */
+    onExactAlarmPermissionMissing?: () => void;
   }
 }
 
@@ -45,6 +48,24 @@ interface StoredNotification {
 }
 
 export type PermissionStep = 'notification' | 'autostart' | 'complete';
+
+/**
+ * Type-safe wrapper around the native Android JS bridge.
+ * Falls back to safe no-op defaults when running on web/dev.
+ */
+class AndroidBridge {
+  isBatteryOptimized(): boolean          { return window.Android?.isBatteryOptimized() ?? false; }
+  openBatterySettings(): void            { window.Android?.openBatterySettings(); }
+  openAutoStartSettings(): boolean       { return window.Android?.openAutoStartSettings() ?? false; }
+  openAppSettings(): void                { window.Android?.openAppSettings(); }
+  isAlarmScheduled(id: number): boolean  { return window.Android?.isAlarmScheduled(id) ?? false; }
+  checkAllAlarms(json: string): string   { return window.Android?.checkAllAlarms(json) ?? '[]'; }
+  cancelAlarm(id: string): void          { window.Android?.cancelAlarmManagerNotification(id); }
+  refreshWidget(): void                  { window.Android?.refreshWidget(); }
+  canScheduleExactAlarms(): boolean      { return window.Android?.canScheduleExactAlarms() ?? true; }
+}
+
+const androidBridge = new AndroidBridge();
 
 export class NotificationService {
   private static instance: NotificationService;
@@ -120,6 +141,7 @@ export class NotificationService {
   static getInstance(): NotificationService {
     if (!NotificationService.instance) {
       NotificationService.instance = new NotificationService();
+      notificationLogger.setService(NotificationService.instance);
     }
     return NotificationService.instance;
   }
@@ -175,19 +197,12 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
-      if (window.Android?.openAutoStartSettings) {
-        const opened = window.Android.openAutoStartSettings();
-        if (!opened) {
-          // Fallback to app settings if manufacturer-specific settings not available
-          this.openAppSettings();
-        }
-      } else {
-        // Fallback to app settings
+      const opened = androidBridge.openAutoStartSettings();
+      if (!opened) {
         this.openAppSettings();
       }
     } catch (e) {
       console.error('Failed to open auto-start settings:', e);
-      // Fallback to app settings
       this.openAppSettings();
     }
   }
@@ -196,9 +211,7 @@ export class NotificationService {
     if (!Capacitor.isNativePlatform()) return;
 
     try {
-      if (window.Android?.openAppSettings) {
-        window.Android.openAppSettings();
-      }
+      androidBridge.openAppSettings();
     } catch (e) {
       console.error('Failed to open app settings:', e);
     }
@@ -260,13 +273,14 @@ export class NotificationService {
       try {
         await this.scheduleLocalNotification(id, name, scheduledAt);
 
-        // Verify and log result
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const verified = await this.verifyNotificationScheduled(id);
-
-        // Verify it was actually scheduled
-        const pending = await LocalNotifications.getPending();
-        const wasScheduled = pending.notifications.some(n => n.id === toNumericId(id));
+        // Retry verification with exponential backoff to handle slow Android registration
+        let wasScheduled = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, 200 * (attempt + 1)));
+          const pending = await LocalNotifications.getPending();
+          wasScheduled = pending.notifications.some(n => n.id === toNumericId(id));
+          if (wasScheduled) break;
+        }
 
         if (!wasScheduled) {
           throw new Error('Notification was not added to pending list');
@@ -312,9 +326,7 @@ export class NotificationService {
         // Cancel Capacitor notification
         await LocalNotifications.cancel({ notifications: [{ id: numericId }] });
         // Also cancel AlarmManager alarm (in case it was scheduled by widget)
-        if (window.Android?.cancelAlarmManagerNotification) {
-          window.Android.cancelAlarmManagerNotification(id);
-        }
+        androidBridge.cancelAlarm(id);
       }
     }
 
@@ -446,7 +458,7 @@ export class NotificationService {
     if (Capacitor.isNativePlatform()) {
       await Preferences.set({ key: 'notifications', value: notificationsJson });
       await Preferences.set({ key: 'savedNames', value: savedNamesJson });
-      window.Android?.refreshWidget();
+      androidBridge.refreshWidget();
     } else {
       localStorage.setItem('notifications', notificationsJson);
       localStorage.setItem('savedNames', savedNamesJson);

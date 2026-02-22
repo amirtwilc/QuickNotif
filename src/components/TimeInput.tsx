@@ -1,9 +1,15 @@
 import React, { useState, useRef } from 'react';
+import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Clock, Timer } from 'lucide-react';
+
+const relativeSchema = z.object({
+  hours: z.number().int().min(0).max(8760),
+  minutes: z.number().int().min(0).max(59),
+}).refine(d => d.hours > 0 || d.minutes > 0, { message: "At least 1 minute required" });
 
 interface TimeInputProps {
   onSubmit: (time: string, type: 'absolute' | 'relative') => void;
@@ -25,19 +31,20 @@ export const TimeInput: React.FC<TimeInputProps> = ({ onSubmit }) => {
   };
 
   const handleRelativeSubmit = () => {
+    const parsed = relativeSchema.safeParse({
+      hours: hours ? parseInt(hours, 10) : 0,
+      minutes: minutes ? parseInt(minutes, 10) : 0,
+    });
+    if (!parsed.success) return;
+
+    const { hours: h, minutes: m } = parsed.data;
     const parts = [];
-    if (hours && parseInt(hours) > 0) {
-      parts.push(`${parseInt(hours)} ${parseInt(hours) === 1 ? 'hour' : 'hours'}`);
-    }
-    if (minutes && parseInt(minutes) > 0) {
-      parts.push(`${parseInt(minutes)} ${parseInt(minutes) === 1 ? 'minute' : 'minutes'}`);
-    }
-    
-    if (parts.length > 0) {
-      onSubmit(parts.join(' '), 'relative');
-      setHours('');
-      setMinutes('');
-    }
+    if (h > 0) parts.push(`${h} ${h === 1 ? 'hour' : 'hours'}`);
+    if (m > 0) parts.push(`${m} ${m === 1 ? 'minute' : 'minutes'}`);
+
+    onSubmit(parts.join(' '), 'relative');
+    setHours('');
+    setMinutes('');
   };
 
   return (

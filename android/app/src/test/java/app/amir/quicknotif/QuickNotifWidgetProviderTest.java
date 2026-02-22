@@ -225,15 +225,16 @@ public class QuickNotifWidgetProviderTest {
     }
 
     @Test
-    public void reactivateAction_invalidType_inferredFromColon() throws Exception {
+    public void reactivateAction_invalidType_skipsReactivation() throws Exception {
+        long originalScheduledAt = System.currentTimeMillis() - 1000L;
         JSONArray arr = new JSONArray();
         JSONObject n = new JSONObject();
         n.put("id", "notification_53_1");
-        n.put("name", "Infer absolute");
-        n.put("type", ""); // invalid
+        n.put("name", "Invalid type");
+        n.put("type", ""); // invalid — must be rejected, not inferred
         n.put("time", "09:45");
         n.put("enabled", false);
-        n.put("scheduledAt", System.currentTimeMillis() - 1000L);
+        n.put("scheduledAt", originalScheduledAt);
         arr.put(n);
         storeNotifications(arr);
 
@@ -241,22 +242,24 @@ public class QuickNotifWidgetProviderTest {
         intent.putExtra("notificationId", "notification_53_1");
         provider.onReceive(context, intent);
 
-        // Should not throw and should update storage
+        // Storage must be unchanged — invalid type is rejected, not inferred
         String json = NotifUtils.readNotificationsJson(context);
-        JSONObject updated = new JSONArray(json).getJSONObject(0);
-        assertEquals("absolute", updated.getString("type"));
+        JSONObject stored = new JSONArray(json).getJSONObject(0);
+        assertEquals("", stored.getString("type"));
+        assertEquals(originalScheduledAt, stored.getLong("scheduledAt"));
     }
 
     @Test
-    public void reactivateAction_invalidType_inferredFromHourKeyword() throws Exception {
+    public void reactivateAction_missingType_skipsReactivation() throws Exception {
+        long originalScheduledAt = System.currentTimeMillis() - 1000L;
         JSONArray arr = new JSONArray();
         JSONObject n = new JSONObject();
         n.put("id", "notification_54_1");
-        n.put("name", "Infer relative");
-        n.put("type", ""); // invalid
+        n.put("name", "Missing type");
+        // type field absent
         n.put("time", "2 hours");
         n.put("enabled", false);
-        n.put("scheduledAt", System.currentTimeMillis() - 1000L);
+        n.put("scheduledAt", originalScheduledAt);
         arr.put(n);
         storeNotifications(arr);
 
@@ -264,9 +267,11 @@ public class QuickNotifWidgetProviderTest {
         intent.putExtra("notificationId", "notification_54_1");
         provider.onReceive(context, intent);
 
+        // Storage must be unchanged — missing type is rejected, not inferred
         String json = NotifUtils.readNotificationsJson(context);
-        JSONObject updated = new JSONArray(json).getJSONObject(0);
-        assertEquals("relative", updated.getString("type"));
+        JSONObject stored = new JSONArray(json).getJSONObject(0);
+        assertEquals("", stored.optString("type", ""));
+        assertEquals(originalScheduledAt, stored.getLong("scheduledAt"));
     }
 
     @Test

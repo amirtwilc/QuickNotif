@@ -19,10 +19,16 @@ public class NotificationReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        String notificationId = intent.getStringExtra("notificationId");
-        String notificationName = intent.getStringExtra("notificationName");
-
         AppLogger.init(context);
+
+        String notificationId   = intent.getStringExtra(NotifUtils.EXTRA_NOTIFICATION_ID);
+        String notificationName = intent.getStringExtra(NotifUtils.EXTRA_NOTIFICATION_NAME);
+
+        if (notificationId == null || notificationId.isEmpty()) {
+            AppLogger.e(TAG, "❌ Missing notificationId in intent — cannot display notification");
+            return;
+        }
+
         AppLogger.d(TAG, "🔔 Received notification broadcast: " + notificationName);
 
         if (notificationName == null || notificationName.isEmpty()) {

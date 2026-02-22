@@ -97,9 +97,9 @@ public class BaseNotificationActivityTest {
         assertEquals(5_400_000L, activity.calculateRelativeMs(1, 30));
     }
 
-    @Test
+    @Test(expected = IllegalArgumentException.class)
     public void calculateRelativeMs_zeroZero() {
-        assertEquals(0L, activity.calculateRelativeMs(0, 0));
+        activity.calculateRelativeMs(0, 0);
     }
 
     @Test

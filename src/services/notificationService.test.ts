@@ -37,10 +37,12 @@ vi.mock('./notificationLogger', () => ({
     logDelete: vi.fn().mockResolvedValue(undefined),
     logReactivate: vi.fn().mockResolvedValue(undefined),
     logError: vi.fn().mockResolvedValue(undefined),
+    setService: vi.fn(),
   },
 }));
 
 import { NotificationService } from './notificationService';
+import notificationLogger from './notificationLogger';
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -112,6 +114,12 @@ describe('NotificationService', () => {
       expect(notifications[0].updatedAt).toBeInstanceOf(Date);
       expect(notifications[0].updatedAt.toISOString()).toBe('2026-02-19T08:00:00.000Z');
     });
+
+    it('parses pre-existing savedNames from localStorage', async () => {
+      localStorage.setItem('savedNames', JSON.stringify(['Alice', 'Bob']));
+      await service.initialize();
+      expect(service.getSavedNames()).toEqual(['Alice', 'Bob']);
+    });
   });
 
   // ── scheduleNotification() ────────────────────────────────────────────────
@@ -179,6 +187,19 @@ describe('NotificationService', () => {
       }
       expect(service.getSavedNames()).toHaveLength(10);
     });
+
+    it('sets updatedAt to the current time', async () => {
+      await service.scheduleNotification('Test', '14:30', 'absolute');
+      const notification = service.getNotifications()[0];
+      expect(notification.updatedAt).toBeInstanceOf(Date);
+      expect(notification.updatedAt.getTime()).toBe(new Date('2026-02-19T10:00:00.000Z').getTime());
+    });
+
+    it('sets interval for hours-only relative notifications', async () => {
+      await service.scheduleNotification('Reminder', '1 hour', 'relative');
+      const notification = service.getNotifications()[0];
+      expect(notification.interval).toBe(60 * 60 * 1000);
+    });
   });
 
   // ── calculateScheduleTime (tested via scheduleNotification) ──────────────
@@ -221,6 +242,13 @@ describe('NotificationService', () => {
       await service.scheduleNotification('Test', '1 hour 30 minutes', 'relative');
       const notification = service.getNotifications()[0];
       expect(notification.scheduledAt.getTime()).toBe(now + 90 * 60 * 1000);
+    });
+
+    it('relative "1 hour" → scheduledAt = now + 3600000 ms', async () => {
+      const now = Date.now();
+      await service.scheduleNotification('Test', '1 hour', 'relative');
+      const notification = service.getNotifications()[0];
+      expect(notification.scheduledAt.getTime()).toBe(now + 60 * 60 * 1000);
     });
   });
 
@@ -281,6 +309,13 @@ describe('NotificationService', () => {
       const stored = JSON.parse(localStorage.getItem('notifications')!);
       expect(stored[0].enabled).toBe(false);
     });
+
+    it('does nothing when the ID does not exist', async () => {
+      await service.scheduleNotification('Keeper', '14:30', 'absolute');
+      await expect(service.toggleNotification('nonexistent_id')).resolves.not.toThrow();
+      expect(service.getNotifications()).toHaveLength(1);
+      expect(service.getNotifications()[0].enabled).toBe(true);
+    });
   });
 
   // ── updateNotificationTime() ──────────────────────────────────────────────
@@ -312,6 +347,12 @@ describe('NotificationService', () => {
       await service.updateNotificationTime(id, '15:00', 'absolute');
       expect(service.getNotifications()[0].enabled).toBe(true);
     });
+
+    it('does nothing when the ID does not exist', async () => {
+      await service.scheduleNotification('Keeper', '14:30', 'absolute');
+      await expect(service.updateNotificationTime('nonexistent_id', '15:00', 'absolute')).resolves.not.toThrow();
+      expect(service.getNotifications()[0].time).toBe('14:30');
+    });
   });
 
   // ── getNotifications() ────────────────────────────────────────────────────
@@ -335,6 +376,255 @@ describe('NotificationService', () => {
       const first = service.getNotifications();
       first.pop(); // mutate the returned array
       expect(service.getNotifications()).toHaveLength(1);
+    });
+
+    it('returns an empty array when no notifications exist', async () => {
+      expect(service.getNotifications()).toEqual([]);
+    });
+  });
+
+  // ── reactivateNotification() ──────────────────────────────────────────────
+
+  describe('reactivateNotification()', () => {
+    beforeEach(async () => {
+      await service.initialize();
+    });
+
+    it('does nothing when the ID does not exist', async () => {
+      await service.scheduleNotification('Keeper', '14:30', 'absolute');
+      await expect(service.reactivateNotification('nonexistent_id')).resolves.not.toThrow();
+      expect(service.getNotifications()).toHaveLength(1);
+    });
+
+    it('re-schedules an absolute notification using its existing time', async () => {
+      const id = await service.scheduleNotification('Meeting', '14:30', 'absolute');
+      vi.setSystemTime(new Date('2026-02-20T15:00:00.000Z')); // advance past scheduled time
+      await service.reactivateNotification(id);
+      const notification = service.getNotifications()[0];
+      expect(notification.scheduledAt.getHours()).toBe(14);
+      expect(notification.scheduledAt.getMinutes()).toBe(30);
+      expect(notification.enabled).toBe(true);
+    });
+
+    it('re-schedules a relative notification from the current time', async () => {
+      const id = await service.scheduleNotification('Reminder', '30 minutes', 'relative');
+      vi.setSystemTime(new Date('2026-02-19T11:00:00.000Z'));
+      await service.reactivateNotification(id);
+      const notification = service.getNotifications()[0];
+      expect(notification.scheduledAt.getTime()).toBe(
+        new Date('2026-02-19T11:00:00.000Z').getTime() + 30 * 60 * 1000
+      );
+    });
+
+    it('calls logReactivate with the correct arguments', async () => {
+      const id = await service.scheduleNotification('LogTest', '14:30', 'absolute');
+      await service.reactivateNotification(id);
+      expect(notificationLogger.logReactivate).toHaveBeenCalledWith(
+        id,
+        'LogTest',
+        expect.any(Number)
+      );
+    });
+  });
+
+  // ── refresh() ─────────────────────────────────────────────────────────────
+
+  describe('refresh()', () => {
+    beforeEach(async () => {
+      await service.initialize();
+    });
+
+    it('reloads notifications written to localStorage after initialization', async () => {
+      const stored = JSON.stringify([{
+        id: 'notification_999_zzz',
+        name: 'External',
+        time: '16:00',
+        type: 'absolute',
+        enabled: true,
+        scheduledAt: '2026-02-19T16:00:00.000Z',
+        updatedAt: '2026-02-19T10:00:00.000Z',
+      }]);
+      localStorage.setItem('notifications', stored);
+      await service.refresh();
+      expect(service.getNotifications()).toHaveLength(1);
+      expect(service.getNotifications()[0].name).toBe('External');
+    });
+
+    it('reflects a deletion made directly in localStorage', async () => {
+      await service.scheduleNotification('ToRemove', '14:30', 'absolute');
+      localStorage.setItem('notifications', JSON.stringify([]));
+      await service.refresh();
+      expect(service.getNotifications()).toHaveLength(0);
+    });
+  });
+
+  // ── setPermissionCallbacks() / completePermissionSetup() ──────────────────
+
+  describe('setPermissionCallbacks() and completePermissionSetup()', () => {
+    it('fires onStepChange("complete") when completePermissionSetup is called', async () => {
+      const onStepChange = vi.fn();
+      service.setPermissionCallbacks({ onStepChange });
+      await service.completePermissionSetup();
+      expect(onStepChange).toHaveBeenCalledWith('complete');
+    });
+
+    it('does not throw when no callbacks are registered', async () => {
+      await expect(service.completePermissionSetup()).resolves.not.toThrow();
+    });
+  });
+
+  // ── native platform ────────────────────────────────────────────────────────
+
+  describe('on native platform', () => {
+    beforeEach(() => {
+      mockCapacitorCore.isNativePlatform.mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      mockCapacitorCore.isNativePlatform.mockReturnValue(false);
+    });
+
+    describe('initialize()', () => {
+      it('throws and fires onStepChange("notification") when permission is denied', async () => {
+        mockLocalNotifications.checkPermissions.mockResolvedValueOnce({ display: 'denied' });
+        const onStepChange = vi.fn();
+        service.setPermissionCallbacks({ onStepChange });
+        await expect(service.initialize()).rejects.toThrow('Notification permission not granted');
+        expect(onStepChange).toHaveBeenCalledWith('notification');
+      });
+
+      it('creates notification channel when permission is granted', async () => {
+        await service.initialize();
+        expect(mockLocalNotifications.createChannel).toHaveBeenCalled();
+      });
+
+      it('loads notifications from Preferences', async () => {
+        const stored = JSON.stringify([{
+          id: 'notification_111_aaa',
+          name: 'Restored',
+          time: '14:30',
+          type: 'absolute',
+          enabled: true,
+          scheduledAt: '2026-02-19T14:30:00.000Z',
+          updatedAt: '2026-02-19T10:00:00.000Z',
+        }]);
+        mockPreferences.get.mockImplementation(async ({ key }: { key: string }) => ({
+          value: key === 'notifications' ? stored : null,
+        }));
+        await service.initialize();
+        expect(service.getNotifications()).toHaveLength(1);
+        expect(service.getNotifications()[0].name).toBe('Restored');
+      });
+
+      it('loads savedNames from Preferences', async () => {
+        mockPreferences.get.mockImplementation(async ({ key }: { key: string }) => ({
+          value: key === 'savedNames' ? JSON.stringify(['Alice', 'Bob']) : null,
+        }));
+        await service.initialize();
+        expect(service.getSavedNames()).toEqual(['Alice', 'Bob']);
+      });
+    });
+
+    describe('requestNotificationPermission()', () => {
+      it('returns true and creates channel when granted', async () => {
+        const result = await service.requestNotificationPermission();
+        expect(result).toBe(true);
+        expect(mockLocalNotifications.createChannel).toHaveBeenCalled();
+      });
+
+      it('returns false and fires onPermissionDenied when denied', async () => {
+        mockLocalNotifications.requestPermissions.mockResolvedValueOnce({ display: 'denied' });
+        const onPermissionDenied = vi.fn();
+        service.setPermissionCallbacks({ onPermissionDenied });
+        const result = await service.requestNotificationPermission();
+        expect(result).toBe(false);
+        expect(onPermissionDenied).toHaveBeenCalled();
+      });
+    });
+
+    describe('scheduleNotification()', () => {
+      beforeEach(async () => {
+        await service.initialize();
+      });
+
+      it('removes notification from list and throws when LocalNotifications.schedule fails', async () => {
+        mockLocalNotifications.schedule.mockRejectedValueOnce(new Error('AlarmManager error'));
+        await expect(service.scheduleNotification('Test', '14:30', 'absolute'))
+          .rejects.toThrow('Failed to schedule notification');
+        expect(service.getNotifications()).toHaveLength(0);
+      });
+
+      it('removes notification from list and throws when not found in pending after retries', async () => {
+        mockLocalNotifications.getPending.mockResolvedValue({ notifications: [] });
+        vi.useRealTimers();
+        await expect(service.scheduleNotification('Test', '14:30', 'absolute'))
+          .rejects.toThrow('Notification was not added to pending list');
+        expect(service.getNotifications()).toHaveLength(0);
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-02-19T10:00:00.000Z'));
+      }, 10000);
+
+      it('saves to Preferences and calls refreshWidget on success', async () => {
+        let scheduledId: number | undefined;
+        mockLocalNotifications.schedule.mockImplementation(
+          async ({ notifications }: { notifications: Array<{ id: number }> }) => {
+            scheduledId = notifications[0].id;
+            return {};
+          }
+        );
+        mockLocalNotifications.getPending.mockImplementation(async () => ({
+          notifications: scheduledId !== undefined ? [{ id: scheduledId }] : [],
+        }));
+
+        const promise = service.scheduleNotification('Test', '14:30', 'absolute');
+        await vi.runAllTimersAsync();
+        await promise;
+
+        expect(mockPreferences.set).toHaveBeenCalledWith(
+          expect.objectContaining({ key: 'notifications' })
+        );
+        expect(window.Android!.refreshWidget).toHaveBeenCalled();
+      });
+    });
+
+    describe('toggleNotification()', () => {
+      let id: string;
+
+      beforeEach(async () => {
+        // Schedule in web mode to avoid native scheduling complexity
+        mockCapacitorCore.isNativePlatform.mockReturnValue(false);
+        await service.initialize();
+        id = await service.scheduleNotification('Meeting', '14:30', 'absolute');
+        mockCapacitorCore.isNativePlatform.mockReturnValue(true);
+      });
+
+      it('disabling calls LocalNotifications.cancel and cancelAlarmManagerNotification', async () => {
+        await service.toggleNotification(id);
+        expect(mockLocalNotifications.cancel).toHaveBeenCalledWith({
+          notifications: [{ id: expect.any(Number) }],
+        });
+        expect(window.Android!.cancelAlarmManagerNotification).toHaveBeenCalledWith(id);
+      });
+
+      it('enabling with a future scheduledAt calls LocalNotifications.schedule', async () => {
+        await service.toggleNotification(id); // disable
+        vi.clearAllMocks();
+        await service.toggleNotification(id); // re-enable
+        expect(mockLocalNotifications.schedule).toHaveBeenCalled();
+      });
+
+      it('enabling with a past scheduledAt recalculates and reschedules for next occurrence', async () => {
+        vi.setSystemTime(new Date('2026-02-19T15:00:00.000Z')); // advance past 14:30
+        await service.toggleNotification(id); // disable
+        vi.clearAllMocks();
+        await service.toggleNotification(id); // re-enable — scheduledAt is in the past
+        expect(mockLocalNotifications.schedule).toHaveBeenCalled();
+        const notification = service.getNotifications()[0];
+        expect(notification.scheduledAt.getHours()).toBe(14);
+        expect(notification.scheduledAt.getMinutes()).toBe(30);
+        // Should have moved to tomorrow since 14:30 has passed at 15:00
+        expect(notification.scheduledAt.getDate()).toBe(20);
+      });
     });
   });
 });
