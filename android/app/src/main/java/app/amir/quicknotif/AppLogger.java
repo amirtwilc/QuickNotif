@@ -31,7 +31,7 @@ public final class AppLogger {
     /** Maximum file size before the log is rotated (cleared). Adjust as needed. */
     private static final long MAX_LOG_SIZE_BYTES = 512 * 1024L; // 512 KB
 
-    private static final String LOG_FILE_NAME = "quicknotif.log";
+    private static final String LOG_FILE_NAME = "notification_debug.log";
 
     private static volatile Context appContext;
     private static volatile boolean debugMode = false;

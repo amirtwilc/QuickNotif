@@ -2,6 +2,7 @@ package app.amir.quicknotif;
 
 import android.app.AlarmManager;
 import android.app.PendingIntent;
+import android.content.pm.ApplicationInfo;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -133,7 +134,7 @@ public final class NotifUtils {
                         scheduledAt,
                         pendingIntent
                 );
-                AppLogger.d(TAG,"✅ Alarm scheduled in AlarmManager");
+                AppLogger.d(TAG,"✅ Alarm for " + name + " scheduled in AlarmManager");
             } else {
                 AppLogger.e(TAG,"❌ AlarmManager is null");
             }
@@ -174,6 +175,7 @@ public final class NotifUtils {
      * Uses try-with-resources so the FileWriter is always closed.
      */
     public static void writeToLog(Context context, String type, String id, String name, long scheduledAt) {
+        if ((context.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) == 0) return;
         try {
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US);
             String timestamp = sdf.format(new Date());

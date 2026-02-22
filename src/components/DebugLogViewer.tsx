@@ -2,8 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Share2, Trash2, Download, RefreshCw, Info, Activity } from 'lucide-react';
+import { Share2, Trash2, Download, RefreshCw, Info } from 'lucide-react';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import notificationLogger from '@/services/notificationLogger';
@@ -97,32 +96,6 @@ export const DebugLogViewer: React.FC = () => {
     a.download = `notification_debug_${new Date().toISOString().split('T')[0]}.log`;
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const handleManualCheck = async () => {
-    setLoading(true);
-    try {
-      // Trigger system check manually
-      await notificationLogger['performSystemCheck']();
-      
-      // Wait a moment for it to complete
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Reload logs to show new check
-      await loadLog();
-      
-      toast({
-        title: "System Check Complete",
-        description: "Check the log for results"
-      });
-    } catch (e) {
-      toast({
-        title: "Error",
-        description: "Failed to perform system check",
-        variant: "destructive"
-      });
-    }
-    setLoading(false);
   };
 
   if (!notificationLogger.isDebugMode()) {
@@ -245,21 +218,12 @@ export const DebugLogViewer: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <div className="flex gap-2 flex-wrap mb-3">
-              <Badge variant="outline">📅 Schedule</Badge>
-              <Badge variant="outline">✅ Verify</Badge>
-              <Badge variant="outline">🔔 Fire</Badge>
-              <Badge variant="outline">🗑️ Delete</Badge>
-              <Badge variant="outline">📊 Check</Badge>
-              <Badge variant="outline">❌ Error</Badge>
-            </div>
-            
             <div className="bg-black text-green-400 p-4 rounded-lg font-mono text-xs overflow-x-auto max-h-96 overflow-y-auto">
               <pre className="whitespace-pre-wrap">{logContent || 'No log entries yet...'}</pre>
             </div>
-            
+
             <p className="text-xs text-muted-foreground mt-2">
-              System checks run every minute. Log rotates automatically at 10,000 lines.
+              Log rotates automatically at 10,000 lines.
             </p>
           </div>
         </CardContent>
