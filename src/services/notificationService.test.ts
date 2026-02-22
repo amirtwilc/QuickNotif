@@ -42,6 +42,7 @@ vi.mock('./notificationLogger', () => ({
 }));
 
 import { NotificationService } from './notificationService';
+import notificationLogger from './notificationLogger';
 
 describe('NotificationService', () => {
   let service: NotificationService;
@@ -113,6 +114,12 @@ describe('NotificationService', () => {
       expect(notifications[0].updatedAt).toBeInstanceOf(Date);
       expect(notifications[0].updatedAt.toISOString()).toBe('2026-02-19T08:00:00.000Z');
     });
+
+    it('parses pre-existing savedNames from localStorage', async () => {
+      localStorage.setItem('savedNames', JSON.stringify(['Alice', 'Bob']));
+      await service.initialize();
+      expect(service.getSavedNames()).toEqual(['Alice', 'Bob']);
+    });
   });
 
   // ── scheduleNotification() ────────────────────────────────────────────────
@@ -180,6 +187,19 @@ describe('NotificationService', () => {
       }
       expect(service.getSavedNames()).toHaveLength(10);
     });
+
+    it('sets updatedAt to the current time', async () => {
+      await service.scheduleNotification('Test', '14:30', 'absolute');
+      const notification = service.getNotifications()[0];
+      expect(notification.updatedAt).toBeInstanceOf(Date);
+      expect(notification.updatedAt.getTime()).toBe(new Date('2026-02-19T10:00:00.000Z').getTime());
+    });
+
+    it('sets interval for hours-only relative notifications', async () => {
+      await service.scheduleNotification('Reminder', '1 hour', 'relative');
+      const notification = service.getNotifications()[0];
+      expect(notification.interval).toBe(60 * 60 * 1000);
+    });
   });
 
   // ── calculateScheduleTime (tested via scheduleNotification) ──────────────
@@ -222,6 +242,13 @@ describe('NotificationService', () => {
       await service.scheduleNotification('Test', '1 hour 30 minutes', 'relative');
       const notification = service.getNotifications()[0];
       expect(notification.scheduledAt.getTime()).toBe(now + 90 * 60 * 1000);
+    });
+
+    it('relative "1 hour" → scheduledAt = now + 3600000 ms', async () => {
+      const now = Date.now();
+      await service.scheduleNotification('Test', '1 hour', 'relative');
+      const notification = service.getNotifications()[0];
+      expect(notification.scheduledAt.getTime()).toBe(now + 60 * 60 * 1000);
     });
   });
 
@@ -282,6 +309,13 @@ describe('NotificationService', () => {
       const stored = JSON.parse(localStorage.getItem('notifications')!);
       expect(stored[0].enabled).toBe(false);
     });
+
+    it('does nothing when the ID does not exist', async () => {
+      await service.scheduleNotification('Keeper', '14:30', 'absolute');
+      await expect(service.toggleNotification('nonexistent_id')).resolves.not.toThrow();
+      expect(service.getNotifications()).toHaveLength(1);
+      expect(service.getNotifications()[0].enabled).toBe(true);
+    });
   });
 
   // ── updateNotificationTime() ──────────────────────────────────────────────
@@ -313,6 +347,12 @@ describe('NotificationService', () => {
       await service.updateNotificationTime(id, '15:00', 'absolute');
       expect(service.getNotifications()[0].enabled).toBe(true);
     });
+
+    it('does nothing when the ID does not exist', async () => {
+      await service.scheduleNotification('Keeper', '14:30', 'absolute');
+      await expect(service.updateNotificationTime('nonexistent_id', '15:00', 'absolute')).resolves.not.toThrow();
+      expect(service.getNotifications()[0].time).toBe('14:30');
+    });
   });
 
   // ── getNotifications() ────────────────────────────────────────────────────
@@ -336,6 +376,100 @@ describe('NotificationService', () => {
       const first = service.getNotifications();
       first.pop(); // mutate the returned array
       expect(service.getNotifications()).toHaveLength(1);
+    });
+
+    it('returns an empty array when no notifications exist', async () => {
+      expect(service.getNotifications()).toEqual([]);
+    });
+  });
+
+  // ── reactivateNotification() ──────────────────────────────────────────────
+
+  describe('reactivateNotification()', () => {
+    beforeEach(async () => {
+      await service.initialize();
+    });
+
+    it('does nothing when the ID does not exist', async () => {
+      await service.scheduleNotification('Keeper', '14:30', 'absolute');
+      await expect(service.reactivateNotification('nonexistent_id')).resolves.not.toThrow();
+      expect(service.getNotifications()).toHaveLength(1);
+    });
+
+    it('re-schedules an absolute notification using its existing time', async () => {
+      const id = await service.scheduleNotification('Meeting', '14:30', 'absolute');
+      vi.setSystemTime(new Date('2026-02-20T15:00:00.000Z')); // advance past scheduled time
+      await service.reactivateNotification(id);
+      const notification = service.getNotifications()[0];
+      expect(notification.scheduledAt.getHours()).toBe(14);
+      expect(notification.scheduledAt.getMinutes()).toBe(30);
+      expect(notification.enabled).toBe(true);
+    });
+
+    it('re-schedules a relative notification from the current time', async () => {
+      const id = await service.scheduleNotification('Reminder', '30 minutes', 'relative');
+      vi.setSystemTime(new Date('2026-02-19T11:00:00.000Z'));
+      await service.reactivateNotification(id);
+      const notification = service.getNotifications()[0];
+      expect(notification.scheduledAt.getTime()).toBe(
+        new Date('2026-02-19T11:00:00.000Z').getTime() + 30 * 60 * 1000
+      );
+    });
+
+    it('calls logReactivate with the correct arguments', async () => {
+      const id = await service.scheduleNotification('LogTest', '14:30', 'absolute');
+      await service.reactivateNotification(id);
+      expect(notificationLogger.logReactivate).toHaveBeenCalledWith(
+        id,
+        'LogTest',
+        expect.any(Number)
+      );
+    });
+  });
+
+  // ── refresh() ─────────────────────────────────────────────────────────────
+
+  describe('refresh()', () => {
+    beforeEach(async () => {
+      await service.initialize();
+    });
+
+    it('reloads notifications written to localStorage after initialization', async () => {
+      const stored = JSON.stringify([{
+        id: 'notification_999_zzz',
+        name: 'External',
+        time: '16:00',
+        type: 'absolute',
+        enabled: true,
+        scheduledAt: '2026-02-19T16:00:00.000Z',
+        updatedAt: '2026-02-19T10:00:00.000Z',
+      }]);
+      localStorage.setItem('notifications', stored);
+      await service.refresh();
+      expect(service.getNotifications()).toHaveLength(1);
+      expect(service.getNotifications()[0].name).toBe('External');
+    });
+
+    it('reflects a deletion made directly in localStorage', async () => {
+      await service.scheduleNotification('ToRemove', '14:30', 'absolute');
+      localStorage.setItem('notifications', JSON.stringify([]));
+      await service.refresh();
+      expect(service.getNotifications()).toHaveLength(0);
+    });
+  });
+
+  // ── setPermissionCallbacks() / completePermissionSetup() ──────────────────
+
+  describe('setPermissionCallbacks() and completePermissionSetup()', () => {
+    it('fires onStepChange("complete") when completePermissionSetup is called', async () => {
+      const onStepChange = vi.fn();
+      service.setPermissionCallbacks({ onStepChange });
+      await service.completePermissionSetup();
+      expect(onStepChange).toHaveBeenCalledWith('complete');
+    });
+
+    it('does not throw when no callbacks are registered', async () => {
+      await expect(service.completePermissionSetup()).resolves.not.toThrow();
     });
   });
 });
