@@ -142,17 +142,10 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
                     String time = obj.optString(NotifUtils.JSON_KEY_TIME, "");
                     String type = obj.optString(NotifUtils.JSON_KEY_TYPE, "");
 
-                    // Heuristic: infer type if missing or invalid
+                    // Reject notifications with an invalid or missing type field
                     if (!NotifUtils.TYPE_RELATIVE.equals(type) && !NotifUtils.TYPE_ABSOLUTE.equals(type)) {
-                        String lt = time.toLowerCase(Locale.getDefault());
-                        if (lt.contains("hour") || lt.contains("minute")) {
-                            type = NotifUtils.TYPE_RELATIVE;
-                        } else if (lt.contains(":")) {
-                            type = NotifUtils.TYPE_ABSOLUTE;
-                        } else {
-                            type = NotifUtils.TYPE_RELATIVE;
-                        }
-                        obj.put(NotifUtils.JSON_KEY_TYPE, type);
+                        AppLogger.e(TAG, "❌ Invalid or missing type for notification: " + name + " — skipping reactivation");
+                        break;
                     }
 
                     long interval = 0L;

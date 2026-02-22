@@ -37,6 +37,7 @@ vi.mock('./notificationLogger', () => ({
     logDelete: vi.fn().mockResolvedValue(undefined),
     logReactivate: vi.fn().mockResolvedValue(undefined),
     logError: vi.fn().mockResolvedValue(undefined),
+    setService: vi.fn(),
   },
 }));
 

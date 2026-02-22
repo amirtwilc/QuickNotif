@@ -54,7 +54,7 @@ public class MainActivity extends BridgeActivity {
 
         // Register periodic watchdog that reschedules any alarms cleared by the OS
         PeriodicWorkRequest watchdog = new PeriodicWorkRequest.Builder(
-                AlarmWatchdogWorker.class, 15, TimeUnit.MINUTES)
+                AlarmWatchdogWorker.class, 60, TimeUnit.MINUTES)
                 .build();
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
                 "alarm_watchdog",
@@ -236,6 +236,28 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void refreshWidget() {
             NotifUtils.refreshAllWidgets(MainActivity.this);
+        }
+
+        @JavascriptInterface
+        public boolean canScheduleExactAlarms() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+                return alarmManager != null && alarmManager.canScheduleExactAlarms();
+            }
+            return true; // Pre-Android 12: always allowed
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+            if (alarmManager != null && !alarmManager.canScheduleExactAlarms()) {
+                bridge.getWebView().evaluateJavascript(
+                    "if(window.onExactAlarmPermissionMissing) window.onExactAlarmPermissionMissing();",
+                    null);
+            }
         }
     }
 

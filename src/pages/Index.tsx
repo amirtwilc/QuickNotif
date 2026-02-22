@@ -33,6 +33,22 @@ const Index = () => {
     setSavedNames(notificationService.getSavedNames());
   }, [notificationService]);
 
+  // Show a persistent warning when exact alarm permission is missing (Android 12+).
+  // MainActivity.onResume() calls window.onExactAlarmPermissionMissing() each time
+  // the user returns from Settings without granting the permission.
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    window.onExactAlarmPermissionMissing = () => {
+      toast({
+        title: "Exact Alarm Permission Required",
+        description: "Notifications may fire late. Open Settings > Apps > Quick Notif > Alarms & Reminders and enable the permission.",
+        variant: "destructive",
+        duration: 10000,
+      });
+    };
+    return () => { window.onExactAlarmPermissionMissing = undefined; };
+  }, [toast]);
+
   useEffect(() => {
     const initializeService = async () => {
       try {
@@ -68,9 +84,9 @@ const Index = () => {
 
     // Listen for app state changes (resume from background)
     // This auto-refreshes data when returning from widget interaction
-    let appStateListener: PluginListenerHandle | null = null;
+    let appStateListenerHandle: PluginListenerHandle | null = null;
     if (Capacitor.isNativePlatform()) {
-      appStateListener = App.addListener('appStateChange', async (state) => {
+      App.addListener('appStateChange', async (state) => {
         if (state.isActive) {
           // App came to foreground - refresh data from storage
           try {
@@ -80,13 +96,11 @@ const Index = () => {
             console.error('Failed to refresh on app resume:', error);
           }
         }
-      });
+      }).then(handle => { appStateListenerHandle = handle; });
     }
 
     return () => {
-      if (appStateListener) {
-        appStateListener.remove();
-      }
+      appStateListenerHandle?.remove();
     };
   }, [notificationService, refreshData, toast]);
 
@@ -288,6 +302,7 @@ const Index = () => {
   return (
     <div className="min-h-screen p-4 max-w-md mx-auto">
       <PullToRefresh onRefresh={handleRefresh}>
+        <>
         <header className="text-center mb-8 pt-4">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-primary rounded-full mb-4">
             <Bell className="w-8 h-8 text-primary-foreground" />
@@ -358,6 +373,7 @@ const Index = () => {
             </div>
           )}
         </div>
+        </>
       </PullToRefresh>
     </div>
   );

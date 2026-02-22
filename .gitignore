@@ -22,3 +22,20 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Build artifacts
+*.apk
+
+# Test coverage output
+coverage/
+
+# Backup and temp files
+*.backup
+*_temp.txt
+*.timestamp-*.mjs
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
+# Redundant lock file (bun.lockb is primary)
+package-lock.json

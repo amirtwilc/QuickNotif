@@ -180,6 +180,8 @@ public class QuickNotifWidgetService extends RemoteViewsService {
             return true;
         }
 
+        private static final String TAG = "QuickNotifWidget";
+
         private void loadNotifications() {
             notifications.clear();
             try {
@@ -219,7 +221,9 @@ public class QuickNotifWidgetService extends RemoteViewsService {
                 });
 
                 notifications.addAll(tempNotifications);
-            } catch (Exception ignored) { }
+            } catch (Exception e) {
+                AppLogger.e(TAG, "❌ Failed to load notifications from storage — possible JSON corruption", e);
+            }
         }
 
         /** Immutable data holder for a single notification row in the widget list. */

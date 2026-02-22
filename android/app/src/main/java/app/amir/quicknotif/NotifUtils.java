@@ -101,8 +101,11 @@ public final class NotifUtils {
         return getPrefs(context).getString(KEY_NOTIFICATIONS, "[]");
     }
 
-    public static void saveNotificationsJson(Context context, String json) {
-        getPrefs(context).edit().putString(KEY_NOTIFICATIONS, json).apply();
+    public static synchronized void saveNotificationsJson(Context context, String json) {
+        boolean success = getPrefs(context).edit().putString(KEY_NOTIFICATIONS, json).commit();
+        if (!success) {
+            AppLogger.e(TAG, "❌ Failed to commit notifications to SharedPreferences");
+        }
     }
 
     /**
