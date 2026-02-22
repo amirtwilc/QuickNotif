@@ -66,7 +66,16 @@ export PATH="$ANDROID_HOME/platform-tools:$ANDROID_HOME/tools:$PATH"
 npm install
 ```
 
-### 2. Verify Android SDK path
+### 2. Initialize the Android project
+
+This generates the native Android files required for building and running tests:
+
+```bash
+npm run build
+npx cap sync android
+```
+
+### 3. Verify Android SDK path
 
 ```bash
 adb version
