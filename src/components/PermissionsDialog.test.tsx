@@ -1,13 +1,18 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import PermissionsDialog from './PermissionsDialog';
 
-function renderDialog(step: 'notification' | 'battery' | 'autostart' | 'complete') {
+function renderDialog(
+  step: 'notification' | 'autostart' | 'complete',
+  { onContinue = vi.fn(), onSkip = vi.fn() } = {}
+) {
   return render(
     <PermissionsDialog
       open={true}
       onOpenChange={vi.fn()}
-      onContinue={vi.fn()}
+      onContinue={onContinue}
+      onSkip={onSkip}
       step={step}
     />
   );
@@ -24,16 +29,6 @@ describe('PermissionsDialog', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
   });
 
-  it('step="battery" shows "Battery Optimization" heading', () => {
-    renderDialog('battery');
-    expect(screen.getByText('Battery Optimization')).toBeInTheDocument();
-  });
-
-  it('step="battery" shows "Open Battery Settings" button', () => {
-    renderDialog('battery');
-    expect(screen.getByRole('button', { name: 'Open Battery Settings' })).toBeInTheDocument();
-  });
-
   it('step="autostart" shows "Skip This Step" button', () => {
     renderDialog('autostart');
     expect(screen.getByRole('button', { name: 'Skip This Step' })).toBeInTheDocument();
@@ -41,11 +36,6 @@ describe('PermissionsDialog', () => {
 
   it('step="notification" does NOT show "Skip This Step" button', () => {
     renderDialog('notification');
-    expect(screen.queryByRole('button', { name: 'Skip This Step' })).not.toBeInTheDocument();
-  });
-
-  it('step="battery" does NOT show "Skip This Step" button', () => {
-    renderDialog('battery');
     expect(screen.queryByRole('button', { name: 'Skip This Step' })).not.toBeInTheDocument();
   });
 
@@ -62,5 +52,14 @@ describe('PermissionsDialog', () => {
   it('step="complete" does NOT show "Skip This Step" button', () => {
     renderDialog('complete');
     expect(screen.queryByRole('button', { name: 'Skip This Step' })).not.toBeInTheDocument();
+  });
+
+  it('skip button calls onSkip, not onContinue', async () => {
+    const onContinue = vi.fn();
+    const onSkip = vi.fn();
+    renderDialog('autostart', { onContinue, onSkip });
+    await userEvent.click(screen.getByRole('button', { name: 'Skip This Step' }));
+    expect(onSkip).toHaveBeenCalledOnce();
+    expect(onContinue).not.toHaveBeenCalled();
   });
 });

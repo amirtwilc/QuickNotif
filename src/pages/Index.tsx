@@ -95,34 +95,11 @@ const Index = () => {
       case 'notification': {
         const granted = await notificationService.requestNotificationPermission();
         if (granted) {
-          // Move to battery check
-          await notificationService.requestBatteryOptimization();
+          await notificationService.requestAutoStartPermission();
         }
         // If not granted, the callback will handle showing error
         break;
       }
-
-      case 'battery':
-        await notificationService.openBatterySettings();
-        // Give user time to change settings, then verify
-        setTimeout(async () => {
-          const batteryOk = await notificationService.verifyBatteryOptimization();
-          if (batteryOk) {
-            // Battery optimization disabled, move to next step
-            await notificationService.requestAutoStartPermission();
-          } else {
-            // Still optimized, show warning but allow continuing
-            toast({
-              title: "Battery Optimization Still Enabled",
-              description: "Notifications may not work reliably. You can change this later in Settings > Apps > Quick Notif > Battery.",
-              variant: "destructive",
-              duration: 8000,
-            });
-            // Still move to next step
-            await notificationService.requestAutoStartPermission();
-          }
-        }, 2000);
-        break;
 
       case 'autostart':
         await notificationService.openAutoStartSettings();
@@ -295,6 +272,10 @@ const Index = () => {
     }
   }, [notifications, notificationService, refreshData, toast]);
 
+  const handlePermissionSkip = async () => {
+    await notificationService.completePermissionSetup();
+  };
+
   const handleRefresh = useCallback(async () => {
     try {
       await notificationService.refresh();
@@ -356,6 +337,7 @@ const Index = () => {
             open={showPermissionDialog}
             onOpenChange={setShowPermissionDialog}
             onContinue={handlePermissionContinue}
+            onSkip={handlePermissionSkip}
             step={permissionStep || 'notification'}
           />
 

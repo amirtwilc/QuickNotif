@@ -44,7 +44,7 @@ interface StoredNotification {
   interval?: number;
 }
 
-export type PermissionStep = 'notification' | 'battery' | 'autostart' | 'complete';
+export type PermissionStep = 'notification' | 'autostart' | 'complete';
 
 export class NotificationService {
   private static instance: NotificationService;
@@ -143,35 +143,10 @@ export class NotificationService {
         throw new Error('Notification permission not granted');
       }
 
-      // Check if battery optimization is disabled
-      const batteryOptimized = await this.checkBatteryOptimization();
-      if (batteryOptimized) {
-        // Battery optimization is still ON, need to prompt user
-        this.permissionCallbacks.onStepChange?.('battery');
-        // Don't throw error, just show the dialog and continue loading data
-        await this.setupNotificationChannel();
-      } else {
-        // Everything is good, setup channel
-        await this.setupNotificationChannel();
-      }
+      await this.setupNotificationChannel();
     }
 
     await this.loadFromStorage();
-  }
-
-  async checkBatteryOptimization(): Promise<boolean> {
-    if (!Capacitor.isNativePlatform()) return false;
-
-    try {
-      if (window.Android?.isBatteryOptimized) {
-        return window.Android.isBatteryOptimized();
-      }
-    } catch (e) {
-      console.error('Failed to check battery optimization:', e);
-    }
-
-    // If we can't check, assume it's optimized to be safe
-    return true;
   }
 
   async requestNotificationPermission(): Promise<boolean> {
@@ -187,33 +162,6 @@ export class NotificationService {
       // Permission was denied
       this.permissionCallbacks.onPermissionDenied?.();
       return false;
-    }
-  }
-
-  async requestBatteryOptimization(): Promise<void> {
-    if (!Capacitor.isNativePlatform()) return;
-
-    // Check if battery optimization is already disabled
-    const isOptimized = await this.checkBatteryOptimization();
-
-    if (isOptimized) {
-      // Show the battery settings guidance dialog
-      this.permissionCallbacks.onStepChange?.('battery');
-    } else {
-      // Battery optimization already disabled, skip to next step
-      await this.requestAutoStartPermission();
-    }
-  }
-
-  async openBatterySettings(): Promise<void> {
-    if (!Capacitor.isNativePlatform()) return;
-
-    try {
-      if (window.Android?.openBatterySettings) {
-        window.Android.openBatterySettings();
-      }
-    } catch (e) {
-      console.error('Failed to open battery settings:', e);
     }
   }
 
@@ -254,12 +202,6 @@ export class NotificationService {
     } catch (e) {
       console.error('Failed to open app settings:', e);
     }
-  }
-
-  async verifyBatteryOptimization(): Promise<boolean> {
-    // Re-check battery optimization status
-    const isOptimized = await this.checkBatteryOptimization();
-    return !isOptimized; // Return true if NOT optimized (i.e., user set it correctly)
   }
 
   async completePermissionSetup(): Promise<void> {
@@ -547,23 +489,51 @@ export class NotificationService {
 
   async verifyNotificationScheduled(id: string): Promise<boolean> {
   if (!Capacitor.isNativePlatform()) return true;
-  
+
   try {
     const pending = await LocalNotifications.getPending();
     const numericId = toNumericId(id);
-    
+
     const exists = pending.notifications.some(n => n.id === numericId);
-    
+
     if (!exists) {
       console.warn(`⚠️ Notification ${id} not in pending list!`);
     }
-    
+
     return exists;
   } catch (e) {
     console.error('Failed to verify notification', e);
     return false;
   }
 }
+
+  /**
+   * Re-schedule alarms for notifications that are stored but have no active alarm.
+   * Called automatically by the system check when orphaned notifications are detected.
+   * Uses the original scheduledAt — no recalculation — to restore the exact alarm time.
+   */
+  async rescheduleOrphans(ids: string[]): Promise<void> {
+    if (!Capacitor.isNativePlatform() || ids.length === 0) return;
+
+    for (const id of ids) {
+      const notification = this.notifications.find(n => n.id === id);
+      if (!notification || notification.scheduledAt.getTime() <= Date.now()) continue;
+
+      try {
+        await this.scheduleLocalNotification(id, notification.name, notification.scheduledAt);
+        await notificationLogger.log({
+          timestamp: new Date().toISOString(),
+          type: 'SYSTEM_CHECK',
+          notificationId: id,
+          notificationName: notification.name,
+          scheduledAt: notification.scheduledAt.getTime(),
+          message: `🔧 Auto-rescheduled orphaned alarm for ${notification.scheduledAt.toLocaleString()}`
+        });
+      } catch (e) {
+        await notificationLogger.logError('Failed to reschedule orphan', e, id);
+      }
+    }
+  }
 }
 
 export default NotificationService.getInstance();

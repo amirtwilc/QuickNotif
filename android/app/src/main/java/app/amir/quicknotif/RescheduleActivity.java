@@ -1,6 +1,5 @@
 package app.amir.quicknotif;
 
-import android.util.Log;
 import android.widget.RadioButton;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -76,14 +75,14 @@ public class RescheduleActivity extends BaseNotificationActivity {
 
             updateNotification(notificationId, time, type, scheduledAt);
             NotifUtils.scheduleAlarm(this, notificationId, notificationName, scheduledAt);
-            NotifUtils.writeToLog("RESCHEDULE", notificationId, notificationName, scheduledAt);
+            NotifUtils.writeToLog(this, "RESCHEDULE", notificationId, notificationName, scheduledAt);
             NotifUtils.refreshAllWidgets(this);
 
             Toast.makeText(this, "Notification rescheduled", Toast.LENGTH_SHORT).show();
             finish();
 
         } catch (Exception e) {
-            Log.e(TAG, "Error in handleConfirm", e);
+            AppLogger.e(TAG,"Error in handleConfirm", e);
             Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
@@ -127,10 +126,10 @@ public class RescheduleActivity extends BaseNotificationActivity {
             }
 
             NotifUtils.saveNotificationsJson(this, array.toString());
-            Log.d(TAG, "✅ Updated SharedPreferences");
+            AppLogger.d(TAG,"✅ Updated SharedPreferences");
 
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to update notification in storage", e);
+            AppLogger.e(TAG,"❌ Failed to update notification in storage", e);
         }
     }
 }

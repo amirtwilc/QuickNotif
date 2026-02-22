@@ -15,7 +15,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
-import java.util.TimeZone;
 
 /**
  * RemoteViewsService that provides list data for the QuickNotif home screen widget.
@@ -189,8 +188,6 @@ public class QuickNotifWidgetService extends RemoteViewsService {
 
                 SimpleDateFormat timeFormat = new SimpleDateFormat(TIME_DISPLAY_FORMAT, Locale.getDefault());
                 SimpleDateFormat dateFormat = new SimpleDateFormat(DATE_DISPLAY_FORMAT, Locale.getDefault());
-                SimpleDateFormat isoFormat  = new SimpleDateFormat(NotifUtils.ISO_DATE_FORMAT, Locale.US);
-                isoFormat.setTimeZone(TimeZone.getTimeZone(NotifUtils.UTC_TIMEZONE));
 
                 List<NotificationData> tempNotifications = new ArrayList<>();
                 long currentTime = System.currentTimeMillis();
@@ -200,18 +197,7 @@ public class QuickNotifWidgetService extends RemoteViewsService {
                     boolean enabled = obj.optBoolean(NotifUtils.JSON_KEY_ENABLED, false);
                     String id = obj.optString(NotifUtils.JSON_KEY_ID, "");
 
-                    long scheduledAt = 0L;
-                    try {
-                        scheduledAt = obj.getLong(NotifUtils.JSON_KEY_SCHEDULED_AT);
-                    } catch (Exception e) {
-                        String s = obj.optString(NotifUtils.JSON_KEY_SCHEDULED_AT, "");
-                        if (!s.isEmpty()) {
-                            try {
-                                Date parsed = isoFormat.parse(s);
-                                if (parsed != null) scheduledAt = parsed.getTime();
-                            } catch (Exception ignored2) { }
-                        }
-                    }
+                    long scheduledAt = NotifUtils.parseScheduledAt(obj);
 
                     if (enabled && scheduledAt > 0) {
                         String name = obj.optString(NotifUtils.JSON_KEY_NAME, "");

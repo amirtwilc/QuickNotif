@@ -2,6 +2,23 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ MANDATORY: After Every Code Change
+
+**No task is complete until the full build sequence has been run successfully.**
+After finishing ANY code changes — however small — always execute this sequence before responding that the work is done:
+
+```bash
+npm test
+export JAVA_HOME="C:/Program Files/Java/jdk-21"
+cd android && ./gradlew :app:testDebugUnitTest && cd ..
+npm run build
+npx cap sync android
+cd android && ./gradlew assembleDebug && cd ..
+cp android/app/build/outputs/apk/debug/app-debug.apk QuickNotif-latest.apk
+```
+
+Fix any test failures before proceeding. Never skip this sequence.
+
 ## Project Overview
 
 QuickNotif is a Capacitor-based Android notification scheduler app with a home screen widget. Users can schedule notifications at specific times or after durations, and interact with them directly from the Android widget.

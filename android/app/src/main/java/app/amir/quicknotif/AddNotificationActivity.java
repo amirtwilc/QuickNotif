@@ -1,6 +1,5 @@
 package app.amir.quicknotif;
 
-import android.util.Log;
 import android.widget.EditText;
 import android.widget.RadioButton;
 import android.widget.Toast;
@@ -74,14 +73,14 @@ public class AddNotificationActivity extends BaseNotificationActivity {
             String notificationId = generateNotificationId();
             createNotification(notificationId, name, time, type, scheduledAt, interval);
             NotifUtils.scheduleAlarm(this, notificationId, name, scheduledAt);
-            NotifUtils.writeToLog("CREATE", notificationId, name, scheduledAt);
+            NotifUtils.writeToLog(this, "CREATE", notificationId, name, scheduledAt);
             NotifUtils.refreshAllWidgets(this);
 
             Toast.makeText(this, "Notification created", Toast.LENGTH_SHORT).show();
             finish();
 
         } catch (Exception e) {
-            Log.e(TAG, "Error in handleConfirm", e);
+            AppLogger.e(TAG,"Error in handleConfirm", e);
             Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
@@ -108,9 +107,9 @@ public class AddNotificationActivity extends BaseNotificationActivity {
             array.put(newNotification);
             NotifUtils.saveNotificationsJson(this, array.toString());
 
-            Log.d(TAG, "✅ Created notification in SharedPreferences");
+            AppLogger.d(TAG,"✅ Created notification: id=" + id + ", name=" + name);
         } catch (Exception e) {
-            Log.e(TAG, "❌ Failed to create notification in storage", e);
+            AppLogger.e(TAG,"❌ Failed to create notification in storage", e);
         }
     }
 }

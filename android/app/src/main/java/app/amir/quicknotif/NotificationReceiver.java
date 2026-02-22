@@ -7,8 +7,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
-import android.util.Log;
-
 import androidx.core.app.NotificationCompat;
 
 /**
@@ -24,14 +22,15 @@ public class NotificationReceiver extends BroadcastReceiver {
         String notificationId = intent.getStringExtra("notificationId");
         String notificationName = intent.getStringExtra("notificationName");
 
-        Log.d(TAG, "🔔 Received notification broadcast: " + notificationName);
+        AppLogger.init(context);
+        AppLogger.d(TAG, "🔔 Received notification broadcast: " + notificationName);
 
         if (notificationName == null || notificationName.isEmpty()) {
             notificationName = NotifUtils.CHANNEL_NAME;
         }
 
         showNotification(context, notificationId, notificationName);
-        NotifUtils.writeToLog("FIRE", notificationId, notificationName, 0L);
+        NotifUtils.writeToLog(context, "FIRE", notificationId, notificationName, 0L);
         NotifUtils.refreshAllWidgets(context);
     }
 
@@ -40,7 +39,7 @@ public class NotificationReceiver extends BroadcastReceiver {
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
 
         if (notificationManager == null) {
-            Log.e(TAG, "❌ NotificationManager is null");
+            AppLogger.e(TAG,"❌ NotificationManager is null");
             return;
         }
 
@@ -85,6 +84,6 @@ public class NotificationReceiver extends BroadcastReceiver {
         int numericId = NotifUtils.generateNumericId(id);
         notificationManager.notify(numericId, builder.build());
 
-        Log.d(TAG, "✅ Notification shown: " + name);
+        AppLogger.d(TAG,"✅ Notification shown: " + name);
     }
 }

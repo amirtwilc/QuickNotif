@@ -19,10 +19,8 @@ export interface LogEntry {
 class NotificationLogger {
   private static instance: NotificationLogger;
   private logBuffer: LogEntry[] = [];
-  private DEBUG_MODE = true; // Production mode
-  private intervalId: number | null = null;
+  private DEBUG_MODE = true;
   private LOG_FILE = 'notification_debug.log';
-  private CHECK_INTERVAL = 60 * 1000; // 1 minute
   private MAX_LOG_SIZE = 10000; // Maximum lines before rotation
 
   private constructor() {
@@ -41,19 +39,6 @@ class NotificationLogger {
   private async initializeLogger() {
     try {
       console.log('🚀 Initializing NotificationLogger...');
-      console.log('  - DEBUG_MODE:', this.DEBUG_MODE);
-      console.log('  - Platform:', Capacitor.getPlatform());
-      console.log('  - isNativePlatform:', Capacitor.isNativePlatform());
-      
-      await this.log({
-        timestamp: new Date().toISOString(),
-        type: 'SYSTEM_CHECK',
-        message: '🚀 NotificationLogger initialized'
-      });
-
-      // Start periodic system checks
-      this.startPeriodicChecks();
-
       console.log('✅ NotificationLogger: Debug logging enabled');
     } catch (e) {
       console.error('❌ Failed to initialize logger', e);
@@ -128,7 +113,7 @@ class NotificationLogger {
       try {
         const result = await Filesystem.readFile({
           path: this.LOG_FILE,
-          directory: Directory.Documents,
+          directory: Directory.External,
           encoding: Encoding.UTF8
         });
         existingContent = result.data as string;
@@ -149,7 +134,7 @@ class NotificationLogger {
       await Filesystem.writeFile({
         path: this.LOG_FILE,
         data: existingContent + line,
-        directory: Directory.Documents,
+        directory: Directory.External,
         encoding: Encoding.UTF8,
         recursive: true
       });
@@ -306,25 +291,6 @@ class NotificationLogger {
     await this.performSystemCheck();
   }
 
-  private startPeriodicChecks() {
-    if (this.intervalId) return; // Already started
-
-    // Check every minute
-    this.intervalId = window.setInterval(() => {
-      this.performSystemCheck();
-    }, this.CHECK_INTERVAL);
-
-    // Initial check
-    setTimeout(() => this.performSystemCheck(), 5000); // 5 seconds after start
-  }
-
-  stopPeriodicChecks() {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
-    }
-  }
-
   private async performSystemCheck() {
     if (!Capacitor.isNativePlatform()) return;
 
@@ -399,9 +365,10 @@ class NotificationLogger {
         allScheduledIds  // Now includes both plugin and AlarmManager
       );
 
-      // Warn about REAL orphaned notifications
+      // Warn about REAL orphaned notifications and auto-reschedule them
       if (orphaned.length > 0) {
-        console.error(`❌ Found ${orphaned.length} ORPHANED notifications - these will NOT fire!`);
+        console.error(`❌ Found ${orphaned.length} ORPHANED notifications — auto-rescheduling`);
+        await notificationService.rescheduleOrphans(orphaned);
       }
 
     } catch (e) {
@@ -418,7 +385,7 @@ class NotificationLogger {
     try {
       const result = await Filesystem.readFile({
         path: this.LOG_FILE,
-        directory: Directory.Documents,
+        directory: Directory.External,
         encoding: Encoding.UTF8
       });
       return result.data as string;
@@ -453,7 +420,7 @@ class NotificationLogger {
       await Filesystem.writeFile({
         path: this.LOG_FILE,
         data: `[${new Date().toISOString()}] [SYSTEM_CHECK] 🗑️ Log cleared\n`,
-        directory: Directory.Documents,
+        directory: Directory.External,
         encoding: Encoding.UTF8,
         recursive: true
       });
@@ -494,16 +461,6 @@ class NotificationLogger {
     return this.DEBUG_MODE;
   }
 
-  // Set check interval (in milliseconds)
-  setCheckInterval(ms: number) {
-    this.CHECK_INTERVAL = ms;
-    
-    // Restart checks with new interval
-    this.stopPeriodicChecks();
-    if (this.DEBUG_MODE) {
-      this.startPeriodicChecks();
-    }
-  }
 }
 
 // Export singleton instance

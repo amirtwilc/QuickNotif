@@ -40,6 +40,7 @@ public abstract class BaseNotificationActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppLogger.init(this);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setContentView(getLayoutId());
         initializeCommonViews();

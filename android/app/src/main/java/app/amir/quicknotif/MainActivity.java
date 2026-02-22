@@ -10,13 +10,20 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.provider.Settings;
-import android.util.Log;
 import android.webkit.JavascriptInterface;
+
+import androidx.activity.OnBackPressedCallback;
+
+import androidx.work.ExistingPeriodicWorkPolicy;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
 
 import com.getcapacitor.BridgeActivity;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends BridgeActivity {
 
@@ -26,53 +33,52 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        AppLogger.init(this);
+
         // Request exact alarm permission on Android 12+
         requestExactAlarmPermission();
 
         // Add JavaScript interface to allow web app to call native methods
         bridge.getWebView().addJavascriptInterface(new WebAppInterface(), "Android");
-    }
 
-    @Override
-    public void onBackPressed() {
-        // Move app to background instead of closing it
-        Intent intent = new Intent(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_HOME);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
+        // Move app to background on back press instead of closing it
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                Intent intent = new Intent(Intent.ACTION_MAIN);
+                intent.addCategory(Intent.CATEGORY_HOME);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            }
+        });
+
+        // Register periodic watchdog that reschedules any alarms cleared by the OS
+        PeriodicWorkRequest watchdog = new PeriodicWorkRequest.Builder(
+                AlarmWatchdogWorker.class, 15, TimeUnit.MINUTES)
+                .build();
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+                "alarm_watchdog",
+                ExistingPeriodicWorkPolicy.KEEP,
+                watchdog);
     }
 
     public class WebAppInterface {
 
         @JavascriptInterface
         public boolean isBatteryOptimized() {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-                if (pm != null) {
-                    return !pm.isIgnoringBatteryOptimizations(getPackageName());
-                }
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm != null) {
+                return !pm.isIgnoringBatteryOptimizations(getPackageName());
             }
             return false;
         }
 
         @JavascriptInterface
         public void openBatterySettings() {
-            Intent intent = new Intent();
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                intent.setAction(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                intent.setData(Uri.parse("package:" + getPackageName()));
-                try {
-                    startActivity(intent);
-                } catch (Exception e) {
-                    try {
-                        intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
-                        startActivity(intent);
-                    } catch (Exception ex) {
-                        openAppSettings();
-                    }
-                }
-            } else {
+            try {
+                Intent intent = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                startActivity(intent);
+            } catch (Exception e) {
                 openAppSettings();
             }
         }
@@ -156,7 +162,7 @@ public class MainActivity extends BridgeActivity {
             try {
                 startActivity(intent);
             } catch (Exception e) {
-                e.printStackTrace();
+                AppLogger.e(TAG,"Failed to open app settings", e);
             }
         }
 
@@ -172,7 +178,7 @@ public class MainActivity extends BridgeActivity {
                 );
                 return pendingIntent != null;
             } catch (Exception e) {
-                Log.e(TAG, "Error checking alarm: " + e.getMessage());
+                AppLogger.e(TAG,"Error checking alarm: " + e.getMessage());
                 return false;
             }
         }
@@ -192,7 +198,7 @@ public class MainActivity extends BridgeActivity {
 
                 return scheduled.toString();
             } catch (JSONException e) {
-                Log.e(TAG, "Error checking alarms: " + e.getMessage());
+                AppLogger.e(TAG,"Error checking alarms: " + e.getMessage());
                 return "[]";
             }
         }
@@ -202,13 +208,13 @@ public class MainActivity extends BridgeActivity {
             try {
                 AlarmManager alarmManager = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
                 if (alarmManager == null) {
-                    Log.e(TAG, "AlarmManager is null");
+                    AppLogger.e(TAG,"AlarmManager is null");
                     return;
                 }
 
                 Intent notificationIntent = new Intent(MainActivity.this, NotificationReceiver.class);
-                notificationIntent.putExtra("notificationId", notificationId);
-                notificationIntent.putExtra("notificationName", "");
+                notificationIntent.putExtra(NotifUtils.EXTRA_NOTIFICATION_ID, notificationId);
+                notificationIntent.putExtra(NotifUtils.EXTRA_NOTIFICATION_NAME, "");
 
                 int numericId = NotifUtils.generateNumericId(notificationId);
 
@@ -220,10 +226,10 @@ public class MainActivity extends BridgeActivity {
                 );
 
                 alarmManager.cancel(pendingIntent);
-                Log.d(TAG, "✅ Canceled AlarmManager alarm for ID: " + notificationId
+                AppLogger.d(TAG,"✅ Canceled AlarmManager alarm for ID: " + notificationId
                         + " (numeric: " + numericId + ")");
             } catch (Exception e) {
-                Log.e(TAG, "❌ Error canceling AlarmManager alarm: " + e.getMessage(), e);
+                AppLogger.e(TAG,"❌ Error canceling AlarmManager alarm: " + e.getMessage(), e);
             }
         }
 
