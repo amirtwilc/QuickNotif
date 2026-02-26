@@ -19,7 +19,7 @@ export interface LogEntry {
 class NotificationLogger {
   private static instance: NotificationLogger;
   private logBuffer: LogEntry[] = [];
-  private DEBUG_MODE = true;
+  private DEBUG_MODE = false;
   private LOG_FILE = 'notification_debug.log';
   private MAX_LOG_SIZE = 10000; // Maximum lines before rotation
   private service: NotificationService | null = null;
@@ -44,8 +44,7 @@ class NotificationLogger {
 
   private async initializeLogger() {
     try {
-      console.log('🚀 Initializing NotificationLogger...');
-      console.log('✅ NotificationLogger: Debug logging enabled');
+      // Logger initialized
     } catch (e) {
       console.error('❌ Failed to initialize logger', e);
     }
@@ -53,23 +52,18 @@ class NotificationLogger {
 
   async log(entry: LogEntry) {
     if (!this.DEBUG_MODE || !Capacitor.isNativePlatform()) {
-      console.log('⚠️ Logging skipped:', { DEBUG_MODE: this.DEBUG_MODE, isNative: Capacitor.isNativePlatform() });
       return;
     }
 
     try {
-      console.log('📝 Logging entry:', entry.type, entry.message);
-      
       // Add to buffer
       this.logBuffer.push(entry);
 
       // Format log line
       const logLine = this.formatLogEntry(entry);
-      console.log('📄 Formatted line:', logLine.substring(0, 100) + '...');
 
       // Append to file
       await this.appendToLog(logLine);
-      console.log('✅ Log written successfully');
 
       // Keep buffer size manageable
       if (this.logBuffer.length > 100) {
@@ -125,7 +119,6 @@ class NotificationLogger {
         existingContent = result.data as string;
       } catch (e) {
         // File doesn't exist yet, that's OK
-        console.log('Log file does not exist yet, will create');
       }
 
       // Check if log is too large and rotate
@@ -133,7 +126,6 @@ class NotificationLogger {
       if (lines.length > this.MAX_LOG_SIZE) {
         // Keep last 1000 lines
         existingContent = lines.slice(-1000).join('\n') + '\n';
-        console.log('Log rotated - keeping last 1000 lines');
       }
 
       // Append new line
@@ -281,7 +273,6 @@ class NotificationLogger {
 
   // Manual trigger for system check (for debug button)
   async triggerSystemCheck(): Promise<void> {
-    console.log('🔍 Manual system check triggered');
     await this.performSystemCheck();
   }
 
@@ -315,7 +306,6 @@ class NotificationLogger {
         try {
           const result = window.Android.checkAllAlarms(JSON.stringify(allNumericIds));
           alarmScheduledIds = JSON.parse(result);
-          console.log(`🔍 AlarmManager check: ${alarmScheduledIds.length} alarms scheduled`);
         } catch (e) {
           console.error('Failed to check AlarmManager alarms:', e);
         }
@@ -420,7 +410,6 @@ class NotificationLogger {
       });
 
       this.logBuffer = [];
-      console.log('✅ Log file cleared');
     } catch (e) {
       console.error('Failed to clear log file', e);
     }
