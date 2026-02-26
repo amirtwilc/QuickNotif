@@ -39,3 +39,8 @@ coverage/
 
 # Redundant lock file (bun.lockb is primary)
 package-lock.json
+
+# Android signing — never commit these
+key.properties
+*.jks
+*.keystore

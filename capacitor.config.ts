@@ -14,10 +14,10 @@ const config: CapacitorConfig = {
     }
   },
   android: {
-    allowMixedContent: true,
+    allowMixedContent: false,
     overrideUserAgent: "Quick Notif App",
     appendUserAgent: "Quick Notif",
-    webContentsDebuggingEnabled: true
+    webContentsDebuggingEnabled: false
   }
 };
 
