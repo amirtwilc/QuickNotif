@@ -123,6 +123,7 @@ public class QuickNotifWidgetProvider extends AppWidgetProvider {
             }
 
             NotifUtils.saveNotificationsJson(context, newArray.toString());
+            NotifUtils.cancelAlarm(context, notificationId);
         } catch (Exception e) {
             AppLogger.e(TAG,"❌ Failed to delete notification: " + notificationId, e);
         }

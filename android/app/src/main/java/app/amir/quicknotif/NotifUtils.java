@@ -1,6 +1,7 @@
 package app.amir.quicknotif;
 
 import android.app.AlarmManager;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.pm.ApplicationInfo;
 import android.appwidget.AppWidgetManager;
@@ -132,6 +133,10 @@ public final class NotifUtils {
             AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (alarmManager != null) {
                 alarmManager.cancel(pendingIntent);
+                NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+                if (nm != null) {
+                    nm.cancel(numericId); //make notification disappear if still shown
+                }
                 alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         scheduledAt,
@@ -166,6 +171,10 @@ public final class NotifUtils {
             if (alarmManager != null) {
                 alarmManager.cancel(pendingIntent);
                 AppLogger.d(TAG,"✅ Alarm canceled for ID: " + id);
+            }
+            NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.cancel(numericId);  //make notification disappear if still shown
             }
         } catch (Exception e) {
             AppLogger.e(TAG,"❌ Failed to cancel alarm", e);

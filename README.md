@@ -4,6 +4,31 @@ An Android notification scheduler with a home screen widget. Schedule notificati
 
 <img src="docs/App-Home-Screen.png" alt="Quick Notif home screen" width="320"/>
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+  - [Required](#required)
+  - [Android SDK Requirements](#android-sdk-requirements)
+  - [Environment Variables](#environment-variables)
+- [Setup](#setup)
+- [Running Tests](#running-tests)
+  - [TypeScript / React tests](#typescript--react-tests-vitest)
+  - [Android unit tests](#android-unit-tests-robolectric--junit)
+  - [Test coverage report](#test-coverage-report-optional)
+- [Building the APK](#building-the-apk)
+- [Project Structure](#project-structure)
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+  - [How React and Android Talk to Each Other](#how-react-and-android-talk-to-each-other)
+  - [Alarms, Not Direct Notifications](#alarms-not-direct-notifications)
+  - [Two Scheduling Paths](#two-scheduling-paths)
+  - [Shared Storage](#shared-storage)
+  - [Notification ID Consistency](#notification-id-consistency)
+  - [Alarm Reliability](#alarm-reliability)
+- [Author](#author)
+
+---
+
 ## Prerequisites
 
 Before building the project, make sure you have the following installed:
@@ -204,6 +229,111 @@ QuickNotif/
 - **Testing:** Vitest (frontend), Robolectric + JUnit + Mockito (Android)
 - **Build:** Gradle 8.11.1, AGP, JDK 21
 - **Package manager:** npm
+
+## Architecture
+
+### How React and Android Talk to Each Other
+
+The app is built with [Capacitor](https://capacitorjs.com/), which wraps the React web app inside a native Android `WebView`. The UI is HTML/CSS/JS rendered inside that WebView, while system-level features — alarms, permissions, widget refresh — are handled by Java.
+
+There are two communication channels:
+
+**1. Capacitor plugins** — The React app uses the official `@capacitor/local-notifications` and `@capacitor/preferences` plugins. These call into native Android code through Capacitor's internal bridge without any custom Java required.
+
+**2. JavaScript interface (`window.Android`)** — `MainActivity.java` registers a `WebAppInterface` object on the WebView via `addJavascriptInterface(new WebAppInterface(), "Android")`. This exposes native Java methods directly to TypeScript as `window.Android.*`:
+
+| Method | Purpose |
+|--------|---------|
+| `isBatteryOptimized()` | Check whether battery optimization is blocking alarms |
+| `openBatterySettings()` / `openAutoStartSettings()` | Guide the user through required permission screens |
+| `isAlarmScheduled(id)` / `checkAllAlarms(ids)` | Verify AlarmManager state from TypeScript |
+| `cancelAlarmManagerNotification(id)` | Cancel a pending alarm directly |
+| `refreshWidget()` | Trigger a widget redraw after storage changes |
+| `canScheduleExactAlarms()` | Android 12+ exact alarm permission check |
+
+In TypeScript these calls are wrapped in the `AndroidBridge` class (`notificationService.ts:56`) which provides safe no-op fallbacks when the app runs in a browser.
+
+Android can also call back into JavaScript using `WebView.evaluateJavascript()`. For example, `MainActivity.onResume()` invokes `window.onExactAlarmPermissionMissing()` when the exact alarm permission has been revoked while the app was in the background.
+
+### Alarms, Not Direct Notifications
+
+When the user presses "Schedule", the app does **not** immediately create a system notification. Instead it registers an **AlarmManager alarm** — a future broadcast intent that Android will deliver at the exact requested time, even when the app is closed or the screen is off.
+
+The delivery chain:
+
+```
+User schedules notification
+        │
+        ▼
+AlarmManager alarm registered (exact, allow-while-idle)
+        │
+        │  (time passes — app may be fully closed)
+        ▼
+Android fires broadcast → NotificationReceiver.onReceive()
+        │
+        ▼
+NotificationReceiver calls NotificationManager.notify()
+        │
+        ▼
+Notification appears in the status bar
+```
+
+`NotificationReceiver` is a `BroadcastReceiver` declared in `AndroidManifest.xml`. When the alarm fires it reads the notification name from the intent extras, builds a `NotificationCompat` notification, and posts it. It also refreshes all widget instances so the widget immediately reflects the fired state.
+
+This approach (alarm → receiver → notification) is the standard Android pattern for delivering time-sensitive notifications reliably, because AlarmManager delivery is guaranteed independent of the app process lifecycle.
+
+### Two Scheduling Paths
+
+Two separate code paths can register an AlarmManager alarm, and they produce identical results:
+
+| Path | Where | When used |
+|------|-------|-----------|
+| Capacitor plugin | `notificationService.ts` → `LocalNotifications.schedule()` | User schedules from the React UI |
+| Direct Java | `NotifUtils.scheduleAlarm()` | Widget reactivate/reschedule actions, boot recovery, watchdog |
+
+The `LocalNotifications` plugin internally also uses AlarmManager, so both paths converge on the same broadcast to `NotificationReceiver` at the target time.
+
+### Shared Storage
+
+Both the React layer and native Java read and write to the **same storage**: Android SharedPreferences under the namespace `CapacitorStorage`. The `@capacitor/preferences` plugin writes here, and all Java components (`QuickNotifWidgetProvider`, `BootReceiver`, `AlarmWatchdogWorker`) read it directly via `NotifUtils.readNotificationsJson()`.
+
+Notifications are stored as a JSON array under the `notifications` key:
+
+```json
+[
+  {
+    "id": "notification_1234567890_abc123",
+    "name": "Take medicine",
+    "time": "08:30",
+    "type": "absolute",
+    "enabled": true,
+    "scheduledAt": "2026-02-27T08:30:00.000Z",
+    "interval": null
+  }
+]
+```
+
+`interval` (in milliseconds) is only set for `relative` notifications and is used by the widget's Reactivate action to re-schedule the same duration from the current time.
+
+### Notification ID Consistency
+
+Each notification has a string ID like `notification_1234567890_abc123`. Android APIs require a 32-bit integer, so both sides independently convert the string using the **same DJB2-variant hash algorithm**:
+
+- TypeScript: `toNumericId()` in `src/utils/notificationUtils.ts`
+- Java: `NotifUtils.generateNumericId()` in `NotifUtils.java`
+
+This integer is used as both the `AlarmManager` request code and the `NotificationManager` notification ID. This means that cancelling an alarm registered by one side will correctly cancel the alarm registered by the other.
+
+> **Never change this algorithm.** Doing so would silently break all existing scheduled notifications on devices that have already installed the app.
+
+### Alarm Reliability
+
+Android can cancel AlarmManager alarms in several situations: device reboot, battery saver mode, or aggressive OEM memory management. The app defends against this with two mechanisms:
+
+- **`BootReceiver`** — listens for `ACTION_BOOT_COMPLETED` and immediately re-registers all enabled future alarms from SharedPreferences, without needing to launch the app.
+- **`AlarmWatchdogWorker`** — a `WorkManager` periodic task that runs every 60 minutes, compares the alarms stored in SharedPreferences against actually-registered `PendingIntent`s, and reschedules any that are missing.
+
+---
 
 ## Author
 
