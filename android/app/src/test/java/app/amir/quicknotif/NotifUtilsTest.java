@@ -3,6 +3,8 @@ package app.amir.quicknotif;
 import static org.junit.Assert.*;
 
 import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.SharedPreferences;
 
@@ -181,6 +183,30 @@ public class NotifUtilsTest {
     public void cancelAlarm_whenNoAlarmExists_doesNotThrow() {
         // Should not throw
         NotifUtils.cancelAlarm(context, "notification_nonexistent_0");
+    }
+
+    @Test
+    public void cancelAlarm_alsoCancelsPostedNotification() {
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        int numericId = NotifUtils.generateNumericId("notification_0_0");
+        nm.notify(numericId, new Notification.Builder(context, NotifUtils.CHANNEL_ID).build());
+        assertEquals(1, nm.getActiveNotifications().length);
+
+        NotifUtils.cancelAlarm(context, "notification_0_0");
+
+        assertEquals(0, nm.getActiveNotifications().length);
+    }
+
+    @Test
+    public void scheduleAlarm_cancelsPostedNotification() {
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        int numericId = NotifUtils.generateNumericId("notification_0_0");
+        nm.notify(numericId, new Notification.Builder(context, NotifUtils.CHANNEL_ID).build());
+        assertEquals(1, nm.getActiveNotifications().length);
+
+        NotifUtils.scheduleAlarm(context, "notification_0_0", "Test", System.currentTimeMillis() + 60_000L);
+
+        assertEquals(0, nm.getActiveNotifications().length);
     }
 
     // ─── Constants ────────────────────────────────────────────────────────────

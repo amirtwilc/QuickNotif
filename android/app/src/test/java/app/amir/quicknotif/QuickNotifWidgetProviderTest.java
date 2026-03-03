@@ -3,6 +3,8 @@ package app.amir.quicknotif;
 import static org.junit.Assert.*;
 
 import android.app.AlarmManager;
+import android.app.Notification;
+import android.app.NotificationManager;
 import android.content.Context;
 import android.content.Intent;
 
@@ -129,6 +131,45 @@ public class QuickNotifWidgetProviderTest {
         provider.onReceive(context, intent);
         // Storage unchanged (still "[]")
         assertEquals("[]", NotifUtils.readNotificationsJson(context));
+    }
+
+    @Test
+    public void deleteAction_cancelsScheduledAlarm() throws Exception {
+        JSONArray arr = new JSONArray();
+        JSONObject n = new JSONObject();
+        n.put("id", "notification_2_2");
+        n.put("name", "Delete me");
+        arr.put(n);
+        storeNotifications(arr);
+        NotifUtils.scheduleAlarm(context, "notification_2_2", "Delete me", futureTs());
+        assertNotNull(shadowAlarmManager().getNextScheduledAlarm());
+
+        Intent intent = new Intent(QuickNotifWidgetProvider.ACTION_DELETE);
+        intent.putExtra("notificationId", "notification_2_2");
+        provider.onReceive(context, intent);
+
+        assertNull("Expected alarm to be cancelled after delete", shadowAlarmManager().getNextScheduledAlarm());
+    }
+
+    @Test
+    public void deleteAction_cancelsPostedNotification() throws Exception {
+        JSONArray arr = new JSONArray();
+        JSONObject n = new JSONObject();
+        n.put("id", "notification_2_2");
+        n.put("name", "Delete me");
+        arr.put(n);
+        storeNotifications(arr);
+
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        int numericId = NotifUtils.generateNumericId("notification_2_2");
+        nm.notify(numericId, new Notification.Builder(context, NotifUtils.CHANNEL_ID).build());
+        assertEquals(1, nm.getActiveNotifications().length);
+
+        Intent intent = new Intent(QuickNotifWidgetProvider.ACTION_DELETE);
+        intent.putExtra("notificationId", "notification_2_2");
+        provider.onReceive(context, intent);
+
+        assertEquals(0, nm.getActiveNotifications().length);
     }
 
     // ─── Reactivate action ────────────────────────────────────────────────────
