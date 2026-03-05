@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Solid white background fills the entire window -->
+    <item>
+        <color android:color="#FFFFFF" />
+    </item>
+
+    <!-- App icon centered at 200dp × 200dp — never cropped -->
+    <item
+        android:width="200dp"
+        android:height="200dp"
+        android:gravity="center">
+        <bitmap
+            android:src="@mipmap/ic_launcher_foreground"
+            android:scaleType="fitCenter" />
+    </item>
+
+</layer-list>

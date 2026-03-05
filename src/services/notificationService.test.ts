@@ -523,6 +523,32 @@ describe('NotificationService', () => {
         await service.initialize();
         expect(service.getSavedNames()).toEqual(['Alice', 'Bob']);
       });
+
+      it('fires onStepChange("autostart") when setup not completed and permission already granted', async () => {
+        // Android 9 scenario: permission pre-granted, setupCompleted missing
+        mockPreferences.get.mockResolvedValue({ value: null });
+        const onStepChange = vi.fn();
+        service.setPermissionCallbacks({ onStepChange });
+        await expect(service.initialize()).resolves.not.toThrow();
+        expect(onStepChange).toHaveBeenCalledWith('autostart');
+      });
+
+      it('does not fire onStepChange when setup is already completed', async () => {
+        mockPreferences.get.mockImplementation(async ({ key }: { key: string }) => ({
+          value: key === 'setupCompleted' ? 'true' : null,
+        }));
+        const onStepChange = vi.fn();
+        service.setPermissionCallbacks({ onStepChange });
+        await expect(service.initialize()).resolves.not.toThrow();
+        expect(onStepChange).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('completePermissionSetup()', () => {
+      it('saves setupCompleted flag to Preferences', async () => {
+        await service.completePermissionSetup();
+        expect(mockPreferences.set).toHaveBeenCalledWith({ key: 'setupCompleted', value: 'true' });
+      });
     });
 
     describe('requestNotificationPermission()', () => {

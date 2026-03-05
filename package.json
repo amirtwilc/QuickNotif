@@ -1,7 +1,14 @@
 {
-  "name": "vite_react_shadcn_ts",
+  "name": "quicknotif",
+  "version": "1.0.0",
+  "description": "Android notification scheduler with a home screen widget",
+  "author": "Amir Twil-Cohen",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amirtwilc/QuickNotif.git"
+  },
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -74,6 +81,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@testing-library/jest-dom": "^6.9.1",

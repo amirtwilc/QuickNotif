@@ -44,3 +44,9 @@ package-lock.json
 key.properties
 *.jks
 *.keystore
+
+# Machine-specific Android SDK path
+android/local.properties
+
+# Source assets not needed to build
+resources/
