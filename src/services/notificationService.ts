@@ -156,19 +156,30 @@ export class NotificationService {
 
   async initialize() {
     if (Capacitor.isNativePlatform()) {
-      // Always check current permission status
+      // Always check notification permission — catches revocation on Android 13+
       const permission = await LocalNotifications.checkPermissions();
 
       if (permission.display !== 'granted') {
-        // Show notification permission dialog
         this.permissionCallbacks.onStepChange?.('notification');
         throw new Error('Notification permission not granted');
       }
 
       await this.setupNotificationChannel();
+
+      // Only show autostart onboarding on first run
+      const setupCompleted = await this.loadSetupCompleted();
+      if (!setupCompleted) {
+        this.permissionCallbacks.onStepChange?.('autostart');
+        // Do NOT throw — app loads normally while dialog shows as overlay
+      }
     }
 
     await this.loadFromStorage();
+  }
+
+  private async loadSetupCompleted(): Promise<boolean> {
+    const { value } = await Preferences.get({ key: 'setupCompleted' });
+    return value === 'true';
   }
 
   async requestNotificationPermission(): Promise<boolean> {
@@ -218,6 +229,9 @@ export class NotificationService {
   }
 
   async completePermissionSetup(): Promise<void> {
+    if (Capacitor.isNativePlatform()) {
+      await Preferences.set({ key: 'setupCompleted', value: 'true' });
+    }
     this.permissionCallbacks.onStepChange?.('complete');
   }
 

@@ -104,9 +104,8 @@ The app uses a **shared state model** between the React app and Android widget:
 
 Multi-step permission setup (see `Index.tsx:70-119`):
 1. **Notification Permission:** Standard Android notification permission
-2. **Battery Optimization:** Disable battery optimization for exact alarms
-3. **Auto-Start Permission:** Manufacturer-specific (Xiaomi, OPPO, etc.) - see `MainActivity.java:84-164`
-4. **Exact Alarm Permission:** Android 12+ requirement (requested in `MainActivity.onCreate`)
+2. **Auto-Start Permission:** Manufacturer-specific (Xiaomi, OPPO, etc.) - see `MainActivity.java:84-164`
+3. **Exact Alarm Permission:** Android 12+ requirement (requested in `MainActivity.onCreate`)
 
 ### Widget System
 
