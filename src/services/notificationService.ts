@@ -249,7 +249,10 @@ export class NotificationService {
         vibration: true,
         lights: true,
         lightColor: NOTIFICATION_CONFIG.ICON_COLOR,
-        sound: 'default' // Add sound
+        // Do NOT pass sound here — Capacitor treats any string as a raw resource
+        // filename (/res/raw/<name>.mp3) and sets a broken URI when the file is
+        // absent.  Omitting it leaves the channel sound unset, so Android falls
+        // back to the system default notification sound for IMPORTANCE_HIGH channels.
       });
     } catch (e) {
       console.error('Channel creation failed', e);

@@ -28,7 +28,7 @@ public final class NotifUtils {
     public static final String KEY_NOTIFICATIONS = "notifications";
 
     // Notification channel
-    public static final String CHANNEL_ID   = "timer-alerts";
+    public static final String CHANNEL_ID   = "timer-alerts-v3";
     public static final String CHANNEL_NAME = "Quick Notif";
     public static final int    ACCENT_COLOR = 0xFF6366F1;
 
