@@ -215,7 +215,7 @@ public class NotifUtilsTest {
     public void constants_valuesMatchExpected() {
         assertEquals("CapacitorStorage", NotifUtils.PREFS_NAME);
         assertEquals("notifications",    NotifUtils.KEY_NOTIFICATIONS);
-        assertEquals("timer-alerts",     NotifUtils.CHANNEL_ID);
+        assertEquals("timer-alerts-v3",   NotifUtils.CHANNEL_ID);
         assertEquals(0xFF6366F1,         NotifUtils.ACCENT_COLOR);
     }
 

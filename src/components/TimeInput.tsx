@@ -121,7 +121,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({ onSubmit }) => {
                 max="59"
                 value={minutes}
                 onChange={(e) => setMinutes(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))}
-                placeholder="15"
+                placeholder="0"
                 className="time-input mt-2"
               />
             </div>

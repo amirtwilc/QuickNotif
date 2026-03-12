@@ -6,7 +6,7 @@
 
 export const NOTIFICATION_CONFIG = {
   // Notification channel configuration
-  CHANNEL_ID: 'timer-alerts',
+  CHANNEL_ID: 'timer-alerts-v3',
   CHANNEL_NAME: 'Quick Notif',
   CHANNEL_DESCRIPTION: 'Critical timer notifications',
   CHANNEL_IMPORTANCE: 5, // Max importance for time-critical notifications
